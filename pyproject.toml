@@ -21,7 +21,14 @@ dependencies = [
     "seaborn",
     "torch",
     "tqdm",
-    "hydra-core"
+    "hydra-core",
+    "vllm",
+    "fastapi",
+    "uvicorn",
+    "prometheus-client",
+    "pandas",
+    "numpy",
+    "httpx"
 ]
 
 [project.scripts]
