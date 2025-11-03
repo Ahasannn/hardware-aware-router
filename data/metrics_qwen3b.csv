@@ -1,0 +1,13 @@
+prompt,prompt_tokens,output_tokens,TTFT_s,TPOT_s
+Explain quicksort in one sentence.,8,58,0.336,0.0231
+Why is the sky blue?,6,128,0.705,0.022
+Write a short Python function to reverse a list.,10,128,0.705,0.022
+Summarize the theory of relativity in 2 lines.,13,50,0.28,0.0224
+What is a GPU warp?,6,128,0.706,0.0221
+What is the difference between prefill and decode in LLM inference?,14,128,0.705,0.022
+2025-11-03T02:23:36.975469Z,05350b40-879a-4683-b008-cd76c93397fa,http://localhost:8001,Qwen/Qwen2.5-3B-Instruct,4096,8,55,0.549216,0.018545,1.56919,14.566,53.923,"{""model"":""Qwen/Qwen2.5-3B-Instruct"",""prompt"":""Explain quicksort in one sentence."",""max_tokens"":128,""temperature"":0.7}"
+2025-11-03T02:23:38.590546Z,3f774bb6-7e13-43b3-96fd-7e509e457ffb,http://localhost:8001,Qwen/Qwen2.5-3B-Instruct,4096,6,128,0.703347,0.02198,3.516733,8.531,45.497,"{""model"":""Qwen/Qwen2.5-3B-Instruct"",""prompt"":""Why is the sky blue?"",""max_tokens"":128,""temperature"":0.7}"
+2025-11-03T02:23:42.148066Z,4597655b-c45d-4cad-805b-bdb75c70ac1f,http://localhost:8001,Qwen/Qwen2.5-3B-Instruct,4096,10,128,0.704242,0.022008,3.521209,14.2,45.439,"{""model"":""Qwen/Qwen2.5-3B-Instruct"",""prompt"":""Write a short Python function to reverse a list."",""max_tokens"":128,""temperature"":0.7}"
+2025-11-03T02:23:45.715385Z,f2043a53-879e-4a4e-962e-ed4647c0eec0,http://localhost:8001,Qwen/Qwen2.5-3B-Instruct,4096,13,59,0.574686,0.018089,1.641959,22.621,55.281,"{""model"":""Qwen/Qwen2.5-3B-Instruct"",""prompt"":""Summarize the theory of relativity in 2 lines."",""max_tokens"":128,""temperature"":0.7}"
+2025-11-03T02:23:47.398806Z,6d128adb-83c8-4ae2-8e3d-1bbae7f8c7e8,http://localhost:8001,Qwen/Qwen2.5-3B-Instruct,4096,6,128,0.70548,0.022046,3.527399,8.505,45.359,"{""model"":""Qwen/Qwen2.5-3B-Instruct"",""prompt"":""What is a GPU warp?"",""max_tokens"":128,""temperature"":0.7}"
+2025-11-03T02:23:50.966640Z,02ce4b09-7c48-46de-97b9-ac73bb373920,http://localhost:8001,Qwen/Qwen2.5-3B-Instruct,4096,14,128,0.707101,0.022097,3.535507,19.799,45.255,"{""model"":""Qwen/Qwen2.5-3B-Instruct"",""prompt"":""What is the difference between prefill and decode in LLM inference?"",""max_tokens"":128,""temperature"":0.7}"

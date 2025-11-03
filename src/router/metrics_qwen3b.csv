@@ -1,0 +1,7 @@
+prompt,prompt_tokens,output_tokens,TTFT_s,TPOT_s
+Explain quicksort in one sentence.,8,56,0.335,0.0239
+Why is the sky blue?,6,128,0.704,0.022
+Write a short Python function to reverse a list.,10,128,0.702,0.0219
+Summarize the theory of relativity in 2 lines.,13,50,0.28,0.0224
+What is a GPU warp?,6,128,0.704,0.022
+What is the difference between prefill and decode in LLM inference?,14,128,0.703,0.022
