@@ -7,9 +7,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "router"
 version = "0.1.0"
-description = "Cost-Aware Contrastive Routing for LLMs"
+description = "Hardware Cost Aware LLM Routing"
 authors = [
-    { name = "Reza Shirkavand", email = "rezashkv@umd.du" }
+    { name = "Ahasan Kabir", email = "ahasankabir146@gmail.com" }
 ]
 dependencies = [
     "transformers",
@@ -28,7 +28,9 @@ dependencies = [
     "prometheus-client",
     "pandas",
     "numpy",
-    "httpx"
+    "httpx",
+    "pyyaml",
+    "openai"
 ]
 
 [project.scripts]

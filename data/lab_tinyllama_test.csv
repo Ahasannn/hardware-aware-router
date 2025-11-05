@@ -1,0 +1,6 @@
+request_id,timestamp,prompt_id,model_id,gpu_id,p_tokens,running_req_count,waiting_req_count,kv_cache_tokens,gpu_free_mem_bytes,prefill_tokens_per_s,decode_tokens_per_s,ttft_s,tpot_s_per_token,latency_s,slo_flag,d_tokens
+83559ca7-f0da-419d-bec4-23354fa9731d,2025-11-04T19:37:35.509273,unified_chip2/123944,TinyLlama/TinyLlama-1.1B-Chat-v1.0,0,20,0,0,0,0,0,0,0,0,1.178584337234497,0,0
+01087d24-59d5-4cd5-b671-25f14ea2d723,2025-11-04T19:37:36.556558,unified_chip2/36818,TinyLlama/TinyLlama-1.1B-Chat-v1.0,0,26,0,0,0,0,0,0,0,0,1.0359470844268799,0,0
+54cd9224-dff7-4b74-b8bc-777008733661,2025-11-04T19:37:37.591891,unified_chip2/57496,TinyLlama/TinyLlama-1.1B-Chat-v1.0,0,10,0,0,0,0,0,0,0,0,1.0244312286376953,1,0
+c3219d53-26f1-4278-b338-cdeee993a662,2025-11-04T19:37:38.615282,unified_chip2/138502,TinyLlama/TinyLlama-1.1B-Chat-v1.0,0,6,0,0,0,0,0,0,0,0,1.0123720169067383,1,0
+1b55471f-e1a9-45c8-9647-06af8c58a563,2025-11-04T19:37:39.156656,itwgpt4/39594,TinyLlama/TinyLlama-1.1B-Chat-v1.0,0,8,0,0,0,0,0,0,0,0,0.5302879810333252,0,0

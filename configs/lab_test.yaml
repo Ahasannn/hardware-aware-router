@@ -1,0 +1,4 @@
+gpus:
+  0:
+    - name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      hf_id: TinyLlama/TinyLlama-1.1B-Chat-v1.0

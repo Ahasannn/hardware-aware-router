@@ -5,6 +5,8 @@ Collects per-request latency + hardware metrics from vLLM for cost-model trainin
 
 import argparse, csv, os, random, time, uuid, yaml, requests, datetime
 from openai import OpenAI
+from typing import List
+from datasets import load_dataset
 
 # ---------------------- CONFIG ----------------------
 
@@ -25,19 +27,29 @@ CSV_FIELDS = [
 ]
 
 # ---------------- LOAD PROMPTS (MixInstruct) ----------------
-from datasets import load_dataset
+def load_mix_instruct_prompts(n: int = 10, seed: int = 42):
+    """
+    Load Mix-Instruct validation split and return a list of
+    (prompt_id, prompt_text) pairs for the first n prompts.
+    """
+    print(f"Loading Mix-Instruct (llm-blender/mix-instruct)...")
+    ds = load_dataset("llm-blender/mix-instruct", split="validation")
 
-print("Loading MixInstruct dataset...")
-ds = load_dataset("teknium/MixInstruct", split="train")
+    # Combine 'instruction' and 'input' like CSCR does
+    def concat_prompt(x):
+        inp = x["input"].strip() if x["input"] else ""
+        return {"prompt": (x["instruction"].strip() + " " + inp).strip()}
 
-# take only first N prompts
-prompts = []
-for i in range(min(args.num_prompts, len(ds))):
-    prompt_text = ds[i]["instruction"]  # main prompt text field
-    prompt_id = ds[i]["id"] if "id" in ds[i] else i
-    prompts.append((prompt_id, prompt_text))
+    ds = ds.map(concat_prompt)
 
-print(f"Loaded {len(prompts)} prompts from MixInstruct.")
+    # sample or take first n
+    random.seed(seed)
+    sampled = ds.select(range(min(n, len(ds))))
+
+    # produce clean list of (id, prompt)
+    prompts = [(row["id"], row["prompt"]) for row in sampled]
+    print(f"Loaded {len(prompts)} prompts.")
+    return prompts
 
 
 # ---------------------- PROMETHEUS FETCHER ----------------------
@@ -125,7 +137,7 @@ def main():
     parser.add_argument("--config", required=True, help="Path to GPU–Model YAML map.")
     parser.add_argument("--prom_url", default="http://localhost:8000/metrics")
     parser.add_argument("--output", default="data/hw_dataset.csv")
-    parser.add_argument("--num_prompts", type=int, default=50)
+    parser.add_argument("--num_prompts", type=int, default=5)
     args = parser.parse_args()
 
     # --- load config
@@ -136,13 +148,7 @@ def main():
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
 
-    prompts = [
-        "Explain quantum computing in simple terms.",
-        "Write a haiku about GPUs.",
-        "What is reinforcement learning?",
-        "Summarize the benefits of hardware-aware routing.",
-        "List three applications of transformers.",
-    ]
+    prompts = load_mix_instruct_prompts(args.num_prompts)
 
     with open(args.output, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
@@ -163,7 +169,7 @@ def main():
             row = {
                 "request_id": str(uuid.uuid4()),
                 "timestamp": datetime.datetime.now().isoformat(),
-                "prompt_id": i,
+                "prompt_id": prompt_id,
                 "model_id": model_name,
                 "gpu_id": gpu_id,
                 "p_tokens": p_tokens,
@@ -173,7 +179,7 @@ def main():
                 "slo_flag": slo_flag,
             }
             writer.writerow(row)
-            print(f"[{i+1}] {model_name} on GPU{gpu_id}: {latency_info['latency_s']:.3f}s")
+            print(f"[{prompt_id}] {model_name} on GPU{gpu_id}: {latency_info['latency_s']:.3f}s")
 
     print(f"\n✅ Data collection complete → {args.output}")
 
