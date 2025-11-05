@@ -3,7 +3,7 @@ build_hardware_cost_dataset.py
 Collects per-request latency + hardware metrics from vLLM for cost-model training.
 """
 
-import argparse, csv, os, random, time, uuid, yaml, requests, datetime
+import argparse, csv, os, random, time, uuid, yaml, requests, datetime, torch
 from openai import OpenAI
 from typing import List
 from datasets import load_dataset
@@ -13,18 +13,26 @@ from datasets import load_dataset
 CSV_FIELDS = [
     # Request Metadata
     "request_id", "timestamp", "prompt_id", "model_id", "gpu_id",
+
     # Prompt Info
-    "p_tokens", 
+    "p_tokens",
+
     # Hardware Snapshot (Before Dispatch)
-    "running_req_count", "waiting_req_count", "kv_cache_tokens",
-    "gpu_free_mem_bytes", "prefill_tokens_per_s", "decode_tokens_per_s",
+    "running_req_count", "waiting_req_count",
+    "kv_cache_usage_perc", "gpu_free_mem_bytes",
+    "prefill_tokens_per_s", "decode_tokens_per_s",
+
     # Latency Labels (After Completion)
     "ttft_s", "tpot_s_per_token", "latency_s",
+
     # Derived
     "slo_flag",
-    #d_tokens after output
+
+    # Output
     "d_tokens",
 ]
+
+
 
 # ---------------- LOAD PROMPTS (MixInstruct) ----------------
 def load_mix_instruct_prompts(n: int = 10, seed: int = 42):
@@ -54,44 +62,82 @@ def load_mix_instruct_prompts(n: int = 10, seed: int = 42):
 
 # ---------------------- PROMETHEUS FETCHER ----------------------
 
-def fetch_vllm_metrics(prom_url: str, model_name: str, gpu_id: int):
-    """Fetch required metrics from Prometheus metrics endpoint."""
+def fetch_vllm_metrics(prom_url: str = "http://localhost:8000/metrics",
+                       model_name: str = None,
+                       gpu_id: int = 0):
+    """Fetch only cost-relevant vLLM Prometheus metrics for the given GPU/model."""
     try:
-        r = requests.get(prom_url)
+        r = requests.get(prom_url, timeout=1)
         if r.status_code != 200:
             print(f"[WARN] Prometheus returned {r.status_code}")
             return {}
-        txt = r.text.splitlines()
+        lines = r.text.splitlines()
     except Exception as e:
         print(f"[WARN] Failed to fetch metrics: {e}")
         return {}
 
     metrics = {
-        "running_req_count": 0,
-        "waiting_req_count": 0,
-        "kv_cache_tokens": 0,
-        "gpu_free_mem_bytes": 0,
-        "prefill_tokens_per_s": 0,
-        "decode_tokens_per_s": 0,
+        "running_req_count": 0.0,
+        "waiting_req_count": 0.0,
+        "kv_cache_usage_perc": 0.0,
+        "gpu_free_mem_bytes": 0.0,
+        "prefill_tokens_per_s": 0.0,   # derived later
+        "decode_tokens_per_s": 0.0     # derived later
     }
 
-    for line in txt:
-        if f'model_name="{model_name}"' in line:
-            if line.startswith("vllm:engine:running_requests"):
-                metrics["running_req_count"] = float(line.split()[-1])
-            elif line.startswith("vllm:engine:waiting_requests"):
-                metrics["waiting_req_count"] = float(line.split()[-1])
-            elif line.startswith("vllm:engine:kv_cache_tokens"):
-                metrics["kv_cache_tokens"] = float(line.split()[-1])
-            elif line.startswith("vllm:engine:prefill_tokens_per_s"):
-                metrics["prefill_tokens_per_s"] = float(line.split()[-1])
-            elif line.startswith("vllm:engine:decode_tokens_per_s"):
-                metrics["decode_tokens_per_s"] = float(line.split()[-1])
+    def parse_metric(prefix: str, filt: str = None):
+        for line in lines:
+            if line.startswith(prefix):
+                if filt is None or filt in line:
+                    try:
+                        return float(line.split()[-1])
+                    except Exception:
+                        pass
+        return 0.0
 
-        if f'gpu_id="{gpu_id}"' in line and line.startswith("vllm:gpu:memory_free_bytes"):
-            metrics["gpu_free_mem_bytes"] = float(line.split()[-1])
+    # --- exact keys confirmed from your metrics dump ---
+    metrics["running_req_count"] = parse_metric("vllm:num_requests_running", f'model_name="{model_name}"')
+    metrics["waiting_req_count"] = parse_metric("vllm:num_requests_waiting", f'model_name="{model_name}"')
+    metrics["kv_cache_usage_perc"] = parse_metric("vllm:kv_cache_usage_perc", f'model_name="{model_name}"')
+    metrics["gpu_free_mem_bytes"] = parse_metric("vllm:gpu:memory_free_bytes", f'gpu_id="{gpu_id}"')
+
+    # optional throughput (can compute externally)
+    prompt_total = parse_metric("vllm:prompt_tokens_total", f'model_name="{model_name}"')
+    gen_total = parse_metric("vllm:generation_tokens_total", f'model_name="{model_name}"')
+    metrics["prefill_tokens_per_s"] = prompt_total
+    metrics["decode_tokens_per_s"] = gen_total
 
     return metrics
+
+
+import os
+
+def dump_vllm_metrics_snapshot(prom_url: str = "http://localhost:8000/metrics",
+                               dump_dir: str = "data/metrics_snapshots",
+                               model_name: str = None):
+    """Save one complete Prometheus /metrics snapshot to a timestamped text file."""
+    import requests, datetime
+    os.makedirs(dump_dir, exist_ok=True)
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    dump_path = os.path.join(
+        dump_dir,
+        f"metrics_{model_name.replace('/', '_') if model_name else 'unknown'}_{timestamp}.txt"
+    )
+
+    try:
+        r = requests.get(prom_url, timeout=2)
+        if r.status_code == 200:
+            with open(dump_path, "w") as f:
+                f.write(r.text)
+            print(f"[INFO] Saved vLLM metrics snapshot → {dump_path}")
+        else:
+            print(f"[WARN] Prometheus returned {r.status_code}, skipping dump.")
+    except Exception as e:
+        print(f"[WARN] Could not fetch metrics snapshot: {e}")
+
+    return dump_path
+
 
 # ---------------------- REQUEST HANDLER ----------------------
 
@@ -110,12 +156,14 @@ def send_request_and_measure(openai_client, model_name, prompt):
 
     first_token_time, total_tokens = None, 0
     for chunk in stream:
-        if "choices" in chunk and chunk.choices:
+        if hasattr(chunk, "choices"):
             delta = chunk.choices[0].delta
-            if delta and ("content" in delta):
-                total_tokens += 1
+            text = getattr(delta, "content", "")
+            if text:
+                total_tokens += len(text.split())
                 if first_token_time is None:
                     first_token_time = time.time()
+
 
     end = time.time()
 
@@ -156,10 +204,13 @@ def main():
 
         for prompt_id, prompt in prompts:
             gpu_id, model_name = random.choice(gpu_models)
+            gpu_name = torch.cuda.get_device_name(gpu_id)
+
             p_tokens = len(prompt.split())
 
             # ---- fetch metrics before dispatch
             metrics = fetch_vllm_metrics(args.prom_url, model_name, gpu_id)
+            dump_vllm_metrics_snapshot(args.prom_url, model_name)
 
             # ---- send request
             latency_info = send_request_and_measure(client, model_name, prompt)
@@ -171,7 +222,7 @@ def main():
                 "timestamp": datetime.datetime.now().isoformat(),
                 "prompt_id": prompt_id,
                 "model_id": model_name,
-                "gpu_id": gpu_id,
+                "gpu_id": gpu_name,
                 "p_tokens": p_tokens,
                 "d_tokens": latency_info["d_tokens"],
                 **metrics,
