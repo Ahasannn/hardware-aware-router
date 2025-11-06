@@ -21,8 +21,6 @@ CSV_FIELDS = [
     "ttft_avg", "itl_avg", "e2e_avg",
     # Latency Labels (After Completion)
     "ttft_s", "tpot_s_per_token", "latency_s",
-    # Derived
-    "slo_flag",
     # Output
     "d_tokens",
 ]
@@ -30,21 +28,27 @@ CSV_FIELDS = [
 
 # ---------------------- PROMPTS ----------------------
 
-def load_mix_instruct_prompts(n: int = 10, seed: int = 42):
-    """Load Mix-Instruct validation split and return (prompt_id, prompt_text) pairs."""
-    print("Loading Mix-Instruct (llm-blender/mix-instruct)...")
-    ds = load_dataset("llm-blender/mix-instruct", split="validation")
+def load_mix_instruct_prompts(n: int = 10):
+    """Load first n prompts from Mix-Instruct training split."""
+    print("Loading Mix-Instruct (llm-blender/mix-instruct, split='train')...")
+    ds = load_dataset("llm-blender/mix-instruct", split="train")
 
+    # Combine instruction + input fields into a single prompt
     def concat_prompt(x):
         inp = x["input"].strip() if x["input"] else ""
         return {"prompt": (x["instruction"].strip() + " " + inp).strip()}
 
     ds = ds.map(concat_prompt)
-    random.seed(seed)
+
+    # Select the first n examples directly (serial order)
     sampled = ds.select(range(min(n, len(ds))))
+
+    # Build (id, prompt) list
     prompts = [(row["id"], row["prompt"]) for row in sampled]
-    print(f"Loaded {len(prompts)} prompts.")
+
+    print(f"Loaded {len(prompts)} prompts (first {n} from training split).")
     return prompts
+
 
 
 # ---------------------- REQUEST HANDLER ----------------------
@@ -106,10 +110,6 @@ def handle_request(prompt_id, prompt, gpu_models, clients, args, writer_lock):
     # Send request
     latency_info = send_request_and_measure(client, model_name, prompt)
 
-    slo_flag = int(
-        latency_info["latency_s"] > 0.1 * (p_tokens + latency_info["d_tokens"])
-    )
-
     row = {
         "request_id": str(uuid.uuid4()),
         "timestamp": datetime.datetime.now().isoformat(),
@@ -119,8 +119,7 @@ def handle_request(prompt_id, prompt, gpu_models, clients, args, writer_lock):
         "p_tokens": p_tokens,
         "d_tokens": latency_info["d_tokens"],
         **metrics_snapshot,
-        **latency_info,
-        "slo_flag": slo_flag,
+        **latency_info
     }
 
     # Thread-safe file write
