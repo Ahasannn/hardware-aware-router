@@ -1,9 +1,10 @@
 """
 build_hardware_cost_dataset.py
 Collects per-request latency + hardware metrics from vLLM for cost-model training.
+Supports concurrent requests to create GPU contention.
 """
 
-import argparse, csv, os, random, time, uuid, yaml, datetime, torch
+import argparse, csv, os, random, time, uuid, yaml, datetime, torch, threading
 from openai import OpenAI
 from datasets import load_dataset
 from .metrics_watcher import start_metrics_watcher, model_metrics
@@ -13,21 +14,15 @@ from .metrics_watcher import start_metrics_watcher, model_metrics
 CSV_FIELDS = [
     # Request Metadata
     "request_id", "timestamp", "prompt_id", "model_id", "gpu_id",
-
     # Prompt Info
     "p_tokens",
-
     # Hardware Snapshot (Before Dispatch)
-    "running_req_count", "waiting_req_count",
-    "kv_cache_usage_perc",
+    "running_req_count", "waiting_req_count", "kv_cache_usage_perc",
     "ttft_avg", "itl_avg", "e2e_avg",
-
     # Latency Labels (After Completion)
     "ttft_s", "tpot_s_per_token", "latency_s",
-
     # Derived
     "slo_flag",
-
     # Output
     "d_tokens",
 ]
@@ -37,7 +32,7 @@ CSV_FIELDS = [
 
 def load_mix_instruct_prompts(n: int = 10, seed: int = 42):
     """Load Mix-Instruct validation split and return (prompt_id, prompt_text) pairs."""
-    print(f"Loading Mix-Instruct (llm-blender/mix-instruct)...")
+    print("Loading Mix-Instruct (llm-blender/mix-instruct)...")
     ds = load_dataset("llm-blender/mix-instruct", split="validation")
 
     def concat_prompt(x):
@@ -57,13 +52,12 @@ def load_mix_instruct_prompts(n: int = 10, seed: int = 42):
 def send_request_and_measure(openai_client, model_name, prompt):
     """Send a single completion request and record TTFT, TPOT, latency."""
     start = time.time()
-    request_id = str(uuid.uuid4())
 
     stream = openai_client.chat.completions.create(
         model=model_name,
         messages=[{"role": "user", "content": prompt}],
         stream=True,
-        max_tokens=256,
+        max_tokens=1024,
     )
 
     first_token_time, total_tokens = None, 0
@@ -89,14 +83,66 @@ def send_request_and_measure(openai_client, model_name, prompt):
     }
 
 
+# ---------------------- WORKER FUNCTION ----------------------
+
+def handle_request(prompt_id, prompt, gpu_models, clients, args, writer_lock):
+    """Single threaded worker that sends one request and logs result."""
+    gpu_id, model_name, _ = random.choice(gpu_models)
+    gpu_name = torch.cuda.get_device_name(gpu_id)
+    p_tokens = len(prompt.split())
+    client = clients[model_name]
+
+    # Fetch current hardware snapshot
+    hw = model_metrics.get(model_name, {})
+    metrics_snapshot = {
+        "running_req_count": hw.get("num_requests_running", 0),
+        "waiting_req_count": hw.get("num_requests_waiting", 0),
+        "kv_cache_usage_perc": hw.get("kv_cache_usage_perc", 0),
+        "ttft_avg": hw.get("ttft_avg", 0),
+        "itl_avg": hw.get("itl_avg", 0),
+        "e2e_avg": hw.get("e2e_avg", 0),
+    }
+
+    # Send request
+    latency_info = send_request_and_measure(client, model_name, prompt)
+
+    slo_flag = int(
+        latency_info["latency_s"] > 0.1 * (p_tokens + latency_info["d_tokens"])
+    )
+
+    row = {
+        "request_id": str(uuid.uuid4()),
+        "timestamp": datetime.datetime.now().isoformat(),
+        "prompt_id": prompt_id,
+        "model_id": model_name,
+        "gpu_id": gpu_name,
+        "p_tokens": p_tokens,
+        "d_tokens": latency_info["d_tokens"],
+        **metrics_snapshot,
+        **latency_info,
+        "slo_flag": slo_flag,
+    }
+
+    # Thread-safe file write
+    with writer_lock:
+        file_exists = os.path.exists(args.output)
+        with open(args.output, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(row)
+        print(f"[{prompt_id}] {model_name} latency={latency_info['latency_s']:.3f}s")
+
+
 # ---------------------- MAIN ----------------------
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to GPU–Model YAML map.")
     parser.add_argument("--output", default="data/hw_dataset.csv")
-    parser.add_argument("--num_prompts", type=int, default=5)
-    parser.add_argument("--interval", type=float, default=5)
+    parser.add_argument("--num_prompts", type=int, default=20)
+    parser.add_argument("--interval", type=float, default=0.2)
+    parser.add_argument("--concurrency", type=int, default=10, help="Number of concurrent threads")
     args = parser.parse_args()
 
     # --- Load config (YAML: GPU → [models])
@@ -111,58 +157,31 @@ def main():
     print("Starting metrics watcher...")
     start_metrics_watcher(model_url_map, interval=args.interval)
 
-    # --- Prepare output
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    # --- Prepare clients per model
     clients = {
         "TinyLlama/TinyLlama-1.1B-Chat-v1.0": OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY"),
         "Qwen/Qwen1.5-0.5B": OpenAI(base_url="http://localhost:8001/v1", api_key="EMPTY"),
     }
 
+    # --- Load prompts
     prompts = load_mix_instruct_prompts(args.num_prompts)
 
-    # --- Collect data
-    with open(args.output, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
-        writer.writeheader()
+    # --- Create threads to simulate concurrent load
+    threads, writer_lock = [], threading.Lock()
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
 
-        for prompt_id, prompt in prompts:
-            gpu_id, model_name, _ = random.choice(gpu_models)
-            gpu_name = torch.cuda.get_device_name(gpu_id)
-            p_tokens = len(prompt.split())
+    for prompt_id, prompt in prompts:
+        t = threading.Thread(
+            target=handle_request,
+            args=(prompt_id, prompt, gpu_models, clients, args, writer_lock)
+        )
+        t.daemon = True
+        t.start()
+        time.sleep(random.uniform(0.0, 0.05))  # smaller stagger
 
-            # Fetch latest hardware snapshot from watcher
-            hw = model_metrics.get(model_name, {})
-            metrics_snapshot = {
-                "running_req_count": hw.get("num_requests_running", 0),
-                "waiting_req_count": hw.get("num_requests_waiting", 0),
-                "kv_cache_usage_perc": hw.get("kv_cache_usage_perc", 0),
-                "ttft_avg": hw.get("ttft_avg", 0),
-                "itl_avg": hw.get("itl_avg", 0),
-                "e2e_avg": hw.get("e2e_avg", 0),
-            }
-
-            # Send request and record latency
-            client = clients[model_name]
-            latency_info = send_request_and_measure(client, model_name, prompt)
-
-            slo_flag = int(
-                latency_info["latency_s"] > 0.1 * (p_tokens + latency_info["d_tokens"])
-            )
-
-            row = {
-                "request_id": str(uuid.uuid4()),
-                "timestamp": datetime.datetime.now().isoformat(),
-                "prompt_id": prompt_id,
-                "model_id": model_name,
-                "gpu_id": gpu_name,
-                "p_tokens": p_tokens,
-                "d_tokens": latency_info["d_tokens"],
-                **metrics_snapshot,
-                **latency_info,
-                "slo_flag": slo_flag,
-            }
-            writer.writerow(row)
-            print(f"[{prompt_id}] {model_name} on GPU{gpu_id}: {latency_info['latency_s']:.3f}s")
+    # Wait for all threads to complete
+    for th in threads:
+        th.join()
 
     print(f"\n✅ Data collection complete → {args.output}")
 

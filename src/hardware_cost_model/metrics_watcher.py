@@ -46,9 +46,6 @@ def fetch_vllm_metrics(model_name, url):
     prev = _prev_values.get(model_name, {})
     data = {}
 
-    print("curr : ",curr)
-    print("prv : ",prev)
-
     for prefix in ["ttft", "itl", "e2e"]:
         sum_key, cnt_key = f"{prefix}_sum", f"{prefix}_count"
         cur_sum, cur_cnt = curr.get(sum_key, 0), curr.get(cnt_key, 0)
