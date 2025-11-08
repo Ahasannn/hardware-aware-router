@@ -150,15 +150,6 @@ def main():
     clients, model_to_gpu = {}, {}
     model_url_map = {}
 
-    # EXPECTED YAML:
-    # gpus:
-    #   "0":
-    #     - name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
-    #       base_url: http://localhost:8005
-    #   "1":
-    #     - name: Qwen/Qwen1.5-0.5B
-    #       base_url: http://localhost:8006
-
     for g, models in cfg["gpus"].items():
         g_id = int(g)
         for m in models:
@@ -173,6 +164,10 @@ def main():
 
     print("Starting metrics watcher...")
     start_metrics_watcher(model_url_map, interval=args.interval)
+
+    if os.path.exists(args.output):
+        os.remove(args.output)
+        print(f"Old CSV removed: {args.output}")
 
     print(f"Initialized {len(clients)} OpenAI clients:")
     for name, client in clients.items():

@@ -8,23 +8,22 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from torch.utils.data import DataLoader, TensorDataset
 from joblib import dump
-from model_utils import HardwareCostNet
+from .model_utils import HardwareCostNet
 
 
 # -----------------------------
 # 1. Load and preprocess dataset
 # -----------------------------
-CSV_PATH = "data/hw_dataset_highload.csv"
+CSV_PATH = "data/hw_dataset_highload_50K.csv"
 df = pd.read_csv(CSV_PATH)
 
 # Drop irrelevant columns
-df = df.drop(columns=[
-    "request_id", "timestamp", "prompt_id", "latency_s", "e2e_avg"
-], errors="ignore")
+df = df.drop(columns=["request_id", "timestamp", "prompt_id", "latency_s", "e2e_avg"], errors="ignore")
 
 # Combine model_id + gpu_id
 df["model_gpu"] = df["model_id"].astype(str) + "_" + df["gpu_id"].astype(str)
@@ -50,7 +49,9 @@ X = preproc.fit_transform(df)
 y = df[["ttft_s_log", "tpot_s_log"]].values
 dump(preproc, "checkpoints/hardware_cost_model/preproc.joblib")
 
-print(f"✅ Preprocessing done | Features={X.shape[1]} | Samples={len(df)}")
+# Split dataset
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+print(f"✅ Preprocessing done | Features={X.shape[1]} | Train={len(X_train)} | Val={len(X_val)}")
 
 # -----------------------------
 # 2. Training setup
@@ -58,11 +59,15 @@ print(f"✅ Preprocessing done | Features={X.shape[1]} | Samples={len(df)}")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"🧠 Using device: {device}")
 
-X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
-y_tensor = torch.tensor(y, dtype=torch.float32).to(device)
-loader = DataLoader(TensorDataset(X_tensor, y_tensor), batch_size=256, shuffle=True)
+def to_loader(X, y, batch=256, shuffle=True):
+    X_t = torch.tensor(X, dtype=torch.float32)
+    y_t = torch.tensor(y, dtype=torch.float32)
+    return DataLoader(TensorDataset(X_t, y_t), batch_size=batch, shuffle=shuffle)
 
-model = HardwareCostNet(X_tensor.shape[1]).to(device)
+train_loader = to_loader(X_train, y_train)
+val_loader = to_loader(X_val, y_val, shuffle=False)
+
+model = HardwareCostNet(X.shape[1]).to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
 loss_fn = nn.MSELoss()
 
@@ -72,14 +77,27 @@ loss_fn = nn.MSELoss()
 for epoch in range(25):
     model.train()
     total_loss = 0
-    for xb, yb in loader:
+    for xb, yb in train_loader:
+        xb, yb = xb.to(device), yb.to(device)
         ttft_pred, tpot_pred = model(xb)
         loss = loss_fn(ttft_pred, yb[:, [0]]) + loss_fn(tpot_pred, yb[:, [1]])
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         total_loss += loss.item() * xb.size(0)
-    print(f"Epoch {epoch+1:02d} | Loss={total_loss/len(loader.dataset):.6f}")
+    train_loss = total_loss / len(train_loader.dataset)
+
+    # ---- validation ----
+    model.eval()
+    with torch.no_grad():
+        val_loss = 0
+        for xb, yb in val_loader:
+            xb, yb = xb.to(device), yb.to(device)
+            ttft_pred, tpot_pred = model(xb)
+            val_loss += (loss_fn(ttft_pred, yb[:, [0]]) + loss_fn(tpot_pred, yb[:, [1]])).item() * xb.size(0)
+        val_loss /= len(val_loader.dataset)
+
+    print(f"Epoch {epoch+1:02d} | Train={train_loss:.6f} | Val={val_loss:.6f}")
 
 # -----------------------------
 # 4. Save model + preprocessor
