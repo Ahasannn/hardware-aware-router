@@ -6,7 +6,7 @@ Supports concurrent requests to create GPU contention.
 
 import argparse, csv, os, random, time, uuid, yaml, datetime, torch, threading
 from openai import OpenAI
-from datasets import load_dataset
+from datasets import load_dataset, get_dataset_config_names
 from .metrics_watcher import start_metrics_watcher, model_metrics
 
 # ---------------------- CONFIG ----------------------
@@ -41,6 +41,49 @@ def load_mix_instruct_prompts(n: int = 10):
     sampled = ds.select(range(min(n, len(ds))))
     prompts = [(str(row["id"]), row["prompt"]) for row in sampled]
     print(f"Loaded {len(prompts)} prompts (first {n} from training split).")
+    return prompts
+
+def load_longbench_prompts(n: int = 10):
+    """
+    Load up to n long prompts from all subsets of LongBench.
+    Each record concatenates 'input' + 'context' if present.
+    Uses the dataset's own '_id' field.
+    """
+    dataset_name = "zai-org/LongBench"
+    print(f"Loading LongBench ({dataset_name})...")
+
+    subsets = get_dataset_config_names(dataset_name)
+    print(f"Found {len(subsets)} subsets: {subsets}")
+
+    prompts = []
+    for subset in subsets:
+        if len(prompts) >= n:
+            break
+        try:
+            ds = load_dataset(dataset_name, subset, split="test")
+        except Exception as e:
+            print(f"⚠️ Skipping subset {subset}: {e}")
+            continue
+
+        def make_prompt(x):
+            inp = x.get("input", "") or ""
+            ctx = x.get("context", "") or ""
+            return {"prompt": (inp.strip() + "\n\n" + ctx.strip()).strip()}
+
+        ds = ds.map(make_prompt)
+
+        for row in ds:
+            if len(prompts) >= n:
+                break
+            if not row.get("prompt"):
+                continue
+            prompts.append((str(row["_id"]), row["prompt"]))
+
+    print(f"✅ Loaded {len(prompts)} LongBench prompts (from multiple subsets).")
+    if prompts:
+        avg_len = sum(len(p[1].split()) for p in prompts) / len(prompts)
+        print(f"Average prompt length ≈ {avg_len:.0f} tokens (rough estimate).")
+
     return prompts
 
 
@@ -177,7 +220,8 @@ def main():
             print(f"  - {name} → <custom base_url>")
 
     # --- Load prompts
-    prompts = load_mix_instruct_prompts(args.num_prompts)
+    #prompts = load_mix_instruct_prompts(args.num_prompts)
+    prompts = load_longbench_prompts(args.num_prompts)
 
     # --- Threaded execution
     threads, writer_lock = [], threading.Lock()
