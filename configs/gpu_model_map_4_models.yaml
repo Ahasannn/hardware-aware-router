@@ -1,11 +1,11 @@
 gpus:
-  0:
+  "0":
     - name: microsoft/Phi-3-mini-128k-instruct
       url: http://localhost:8000
     - name: mistralai/Mistral-7B-Instruct-v0.3
       url: http://localhost:8001
-  1:
+  "1":
     - name: meta-llama/Llama-3.1-8B-Instruct
       url: http://localhost:8002
-    - name: Qwen/Qwen2.5-7B-Instruct
+    - name: Qwen/Qwen2.5-3B-Instruct
       url: http://localhost:8003

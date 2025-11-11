@@ -1,4 +1,0 @@
-request_id,timestamp,prompt_id,model_id,gpu_id,p_tokens,d_tokens,running_req_count,waiting_req_count,kv_cache_tokens,gpu_free_mem_bytes,prefill_tokens_per_s,decode_tokens_per_s,ttft_s,tpot_s_per_token,latency_s,slo_flag
-336d7058-b6c4-48db-8ae1-e2542d72b573,2025-11-04T22:43:43.400021,0,mistralai/Mistral-7B-Instruct-v0.3,0,4,0,0,0,0,0,0,0,0,0,15.978498220443726,1
-a6fd86c1-3166-47b3-9718-c8b6e03f1895,2025-11-04T22:43:55.098298,1,mistralai/Mistral-7B-Instruct-v0.3,0,4,0,0,0,0,0,0,0,0,0,11.689430475234985,1
-edcf734d-7141-4a64-bc7f-450398b28b9f,2025-11-04T22:43:56.346774,2,mistralai/Mistral-7B-Instruct-v0.3,0,5,0,0,0,0,0,0,0,0,0,1.2403478622436523,1

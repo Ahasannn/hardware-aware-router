@@ -1,3 +1,0 @@
-request_id,timestamp,prompt_id,model_id,gpu_id,p_tokens,running_req_count,waiting_req_count,kv_cache_usage_perc,gpu_free_mem_bytes,prefill_tokens_per_s,decode_tokens_per_s,ttft_s,tpot_s_per_token,latency_s,slo_flag,d_tokens
-1ae8d570-bc6c-402d-9770-a8aa235e771c,2025-11-04T20:25:22.760321,unified_chip2/123944,TinyLlama/TinyLlama-1.1B-Chat-v1.0,NVIDIA GeForce RTX 3090,20,0.0,0.0,0.0,0.0,753.0,4745.0,0.14975333213806152,0.004093464343778549,1.1649324893951416,0,248
-92a53a28-228e-4b1a-a85c-29808a52cc4b,2025-11-04T20:25:23.795840,unified_chip2/36818,TinyLlama/TinyLlama-1.1B-Chat-v1.0,NVIDIA GeForce RTX 3090,26,0.0,0.0,0.0,0.0,793.0,5001.0,0.01597738265991211,0.0041331043008898125,1.0244548320770264,0,244
