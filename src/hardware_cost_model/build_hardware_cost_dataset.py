@@ -1,89 +1,48 @@
 """
 build_hardware_cost_dataset.py
 Collects per-request latency + hardware metrics from vLLM for cost-model training.
-Supports concurrent requests to create GPU contention.
+Now loads prompts from src/data/mixed_prompts_final.parquet.
 """
 
 import argparse, csv, os, random, time, uuid, yaml, datetime, torch, threading
 from openai import OpenAI
-from datasets import load_dataset, get_dataset_config_names
+from datasets import load_dataset  # keep for future if needed
+import pandas as pd
 from .metrics_watcher import start_metrics_watcher, model_metrics
+
 
 # ---------------------- CONFIG ----------------------
 
 CSV_FIELDS = [
-    # Request Metadata
     "request_id", "timestamp", "prompt_id", "model_id", "gpu_id",
-    # Prompt Info
     "p_tokens",
-    # Hardware Snapshot (Before Dispatch)
     "running_req_count", "waiting_req_count", "kv_cache_usage_perc",
     "ttft_avg", "itl_avg", "e2e_avg",
-    # Latency Labels (After Completion)
     "ttft_s", "tpot_s_per_token", "latency_s",
-    # Output
     "d_tokens",
 ]
 
 
 # ---------------------- PROMPTS ----------------------
 
-def load_mix_instruct_prompts(n: int = 10):
-    """Load first n prompts from Mix-Instruct training split."""
-    print("Loading Mix-Instruct (llm-blender/mix-instruct, split='train')...")
-    ds = load_dataset("llm-blender/mix-instruct", split="train")
-
-    def concat_prompt(x):
-        inp = x["input"].strip() if x["input"] else ""
-        return {"prompt": (x["instruction"].strip() + " " + inp).strip()}
-
-    ds = ds.map(concat_prompt)
-    sampled = ds.select(range(min(n, len(ds))))
-    prompts = [(str(row["id"]), row["prompt"]) for row in sampled]
-    print(f"Loaded {len(prompts)} prompts (first {n} from training split).")
-    return prompts
-
-def load_longbench_prompts(n: int = 10):
+def load_local_prompts(parquet_path: str, n: int = 10):
     """
-    Load up to n long prompts from all subsets of LongBench.
-    Each record concatenates 'input' + 'context' if present.
-    Uses the dataset's own '_id' field.
+    Load n prompts from the combined local Parquet dataset.
+    Randomly samples to ensure diverse lengths and sources.
     """
-    dataset_name = "zai-org/LongBench"
-    print(f"Loading LongBench ({dataset_name})...")
+    print(f"📂 Loading mixed prompts from {parquet_path} ...")
+    df = pd.read_parquet(parquet_path)
+    print(f"   Total available: {len(df)}")
 
-    subsets = get_dataset_config_names(dataset_name)
-    print(f"Found {len(subsets)} subsets: {subsets}")
+    # random sample of prompts
+    n = min(n, len(df))
+    sampled = df.sample(n=n, random_state=42).reset_index(drop=True)
 
-    prompts = []
-    for subset in subsets:
-        if len(prompts) >= n:
-            break
-        try:
-            ds = load_dataset(dataset_name, subset, split="test")
-        except Exception as e:
-            print(f"⚠️ Skipping subset {subset}: {e}")
-            continue
-
-        def make_prompt(x):
-            inp = x.get("input", "") or ""
-            ctx = x.get("context", "") or ""
-            return {"prompt": (inp.strip() + "\n\n" + ctx.strip()).strip()}
-
-        ds = ds.map(make_prompt)
-
-        for row in ds:
-            if len(prompts) >= n:
-                break
-            if not row.get("prompt"):
-                continue
-            prompts.append((str(row["_id"]), row["prompt"]))
-
-    print(f"✅ Loaded {len(prompts)} LongBench prompts (from multiple subsets).")
-    if prompts:
-        avg_len = sum(len(p[1].split()) for p in prompts) / len(prompts)
-        print(f"Average prompt length ≈ {avg_len:.0f} tokens (rough estimate).")
-
+    prompts = [(str(i), row["prompt"]) for i, row in sampled.iterrows()]
+    lengths = sampled["p_tokens"]
+    print(f"✅ Loaded {len(prompts)} prompts "
+          f"(avg length ≈ {lengths.mean():.0f} tokens, "
+          f"min={lengths.min()}, max={lengths.max()})")
     return prompts
 
 
@@ -133,7 +92,6 @@ def handle_request(prompt_id, prompt, model_name, gpu_id, client, args, writer_l
 
     p_tokens = len(prompt.split())
 
-    # Fetch current hardware snapshot
     hw = model_metrics.get(model_name, {})
     metrics_snapshot = {
         "running_req_count": hw.get("num_requests_running", 0),
@@ -144,7 +102,6 @@ def handle_request(prompt_id, prompt, model_name, gpu_id, client, args, writer_l
         "e2e_avg": hw.get("e2e_avg", 0),
     }
 
-    # Send request safely
     try:
         latency_info = send_request_and_measure(client, model_name, prompt)
     except Exception as e:
@@ -163,7 +120,6 @@ def handle_request(prompt_id, prompt, model_name, gpu_id, client, args, writer_l
         **latency_info,
     }
 
-    # Thread-safe write
     with writer_lock:
         file_exists = os.path.exists(args.output)
         with open(args.output, "a", newline="") as f:
@@ -182,25 +138,22 @@ def main():
     parser.add_argument("--output", default="data/hw_dataset.csv")
     parser.add_argument("--num_prompts", type=int, default=20)
     parser.add_argument("--interval", type=float, default=0.2)
-    parser.add_argument("--concurrency", type=int, default=10, help="Number of concurrent threads")
+    parser.add_argument("--concurrency", type=int, default=10)
+    parser.add_argument("--prompt_path", default="src/data/mixed_prompts_final.parquet",
+                        help="Path to combined prompt dataset (Parquet).")
     args = parser.parse_args()
 
     # --- Load config
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
 
-    # Build explicit mapping of model → (gpu_id, client)
-    clients, model_to_gpu = {}, {}
-    model_url_map = {}
-
+    clients, model_to_gpu, model_url_map = {}, {}, {}
     for g, models in cfg["gpus"].items():
         g_id = int(g)
         for m in models:
             name = m["name"]
             base_root = m["base_url"].rstrip("/")
-            # vLLM OpenAI server expects /v1 prefix
             openai_base = f"{base_root}/v1"
-
             clients[name] = OpenAI(base_url=openai_base, api_key="EMPTY")
             model_to_gpu[name] = g_id
             model_url_map[name] = f"{base_root}/metrics"
@@ -214,14 +167,11 @@ def main():
 
     print(f"Initialized {len(clients)} OpenAI clients:")
     for name, client in clients.items():
-        if hasattr(client, "_client") and hasattr(client._client, "_base_url"):
-            print(f"  - {name} → {client._client._base_url}")
-        else:
-            print(f"  - {name} → <custom base_url>")
+        base = getattr(client._client, "_base_url", "<custom>")
+        print(f"  - {name} → {base}")
 
-    # --- Load prompts
-    #prompts = load_mix_instruct_prompts(args.num_prompts)
-    prompts = load_longbench_prompts(args.num_prompts)
+    # --- Load prompts from local parquet
+    prompts = load_local_prompts(args.prompt_path, args.num_prompts)
 
     # --- Threaded execution
     threads, writer_lock = [], threading.Lock()
@@ -232,7 +182,6 @@ def main():
     model_names = list(clients.keys())
 
     for prompt_id, prompt in prompts:
-        # Randomly choose one of the available models
         model_name = random.choice(model_names)
         client = clients[model_name]
         gpu_id = model_to_gpu[model_name]
@@ -245,7 +194,6 @@ def main():
         threads.append(t)
         time.sleep(random.uniform(0.0, 0.05))  # small stagger
 
-        # limit concurrency manually if needed
         while len([th for th in threads if th.is_alive()]) >= args.concurrency:
             time.sleep(0.1)
 

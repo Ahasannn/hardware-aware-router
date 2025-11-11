@@ -19,7 +19,7 @@ from .model_utils import HardwareCostNet
 # -----------------------------
 # 1. Load and preprocess dataset
 # -----------------------------
-CSV_PATH = "data/hw_dataset_highload_50K.csv"
+CSV_PATH = "data/hw_dataset_qween.csv"
 df = pd.read_csv(CSV_PATH)
 
 # Drop irrelevant columns
