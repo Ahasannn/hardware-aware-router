@@ -1,7 +1,8 @@
 """
 build_hardware_cost_dataset.py
 Collects per-request latency + hardware metrics from vLLM for cost-model training.
-Now loads prompts from src/data/mixed_prompts_final.parquet.
+Now loads prompts from src/data/mixed_prompts_final.parquet and supports
+realistic arrival patterns using RequestPattern.
 """
 
 import argparse, csv, os, random, time, uuid, yaml, datetime, torch, threading
@@ -9,6 +10,7 @@ from openai import OpenAI
 from datasets import load_dataset  # keep for future if needed
 import pandas as pd
 from .metrics_watcher import start_metrics_watcher, model_metrics
+from .load_patterns import RequestPattern
 
 
 # ---------------------- CONFIG ----------------------
@@ -20,6 +22,7 @@ CSV_FIELDS = [
     "ttft_avg", "itl_avg", "e2e_avg",
     "ttft_s", "tpot_s_per_token", "latency_s",
     "d_tokens",
+    "pattern_type", "arrival_rate",
 ]
 
 
@@ -40,9 +43,11 @@ def load_local_prompts(parquet_path: str, n: int = 10):
 
     prompts = [(str(i), row["prompt"]) for i, row in sampled.iterrows()]
     lengths = sampled["p_tokens"]
-    print(f"✅ Loaded {len(prompts)} prompts "
-          f"(avg length ≈ {lengths.mean():.0f} tokens, "
-          f"min={lengths.min()}, max={lengths.max()})")
+    print(
+        f"✅ Loaded {len(prompts)} prompts "
+        f"(avg length ≈ {lengths.mean():.0f} tokens, "
+        f"min={lengths.min()}, max={lengths.max()})"
+    )
     return prompts
 
 
@@ -83,7 +88,17 @@ def send_request_and_measure(openai_client, model_name, prompt):
 
 # ---------------------- WORKER FUNCTION ----------------------
 
-def handle_request(prompt_id, prompt, model_name, gpu_id, client, args, writer_lock):
+def handle_request(
+    prompt_id,
+    prompt,
+    model_name,
+    gpu_id,
+    client,
+    args,
+    writer_lock,
+    pattern_type,
+    arrival_rate,
+):
     """Single threaded worker that sends one request and logs result."""
     try:
         gpu_name = torch.cuda.get_device_name(gpu_id)
@@ -118,6 +133,8 @@ def handle_request(prompt_id, prompt, model_name, gpu_id, client, args, writer_l
         "d_tokens": latency_info["d_tokens"],
         **metrics_snapshot,
         **latency_info,
+        "pattern_type": pattern_type,
+        "arrival_rate": arrival_rate,
     }
 
     with writer_lock:
@@ -133,14 +150,54 @@ def handle_request(prompt_id, prompt, model_name, gpu_id, client, args, writer_l
 # ---------------------- MAIN ----------------------
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True, help="Path to GPU–Model YAML map.")
-    parser.add_argument("--output", default="data/hw_dataset.csv")
-    parser.add_argument("--num_prompts", type=int, default=20)
-    parser.add_argument("--interval", type=float, default=0.2)
-    parser.add_argument("--concurrency", type=int, default=10)
-    parser.add_argument("--prompt_path", default="src/data/mixed_prompts_final.parquet",
-                        help="Path to combined prompt dataset (Parquet).")
+    parser = argparse.ArgumentParser(
+        description="Collect hardware-aware latency dataset from vLLM."
+    )
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Path to GPU-Model YAML map.",
+    )
+    parser.add_argument(
+        "--output",
+        default="data/hw_dataset.csv",
+        help="Path to output CSV file.",
+    )
+    parser.add_argument(
+        "--num_prompts",
+        type=int,
+        default=20,
+        help="Number of prompts to sample and send.",
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=0.3,
+        help="Metric watcher polling interval (seconds).",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=10,
+        help="Maximum concurrent requests (threads).",
+    )
+    parser.add_argument(
+        "--prompt_path",
+        default="src/data/mixed_prompts_final.parquet",
+        help="Path to combined prompt dataset (Parquet).",
+    )
+    parser.add_argument(
+        "--pattern",
+        default="poisson",
+        choices=["poisson", "microburst", "sustained"],
+        help="Request arrival pattern type.",
+    )
+    parser.add_argument(
+        "--rate",
+        type=float,
+        default=5.0,
+        help="Base arrival rate (requests per second).",
+    )
     args = parser.parse_args()
 
     # --- Load config
@@ -161,10 +218,6 @@ def main():
     print("Starting metrics watcher...")
     start_metrics_watcher(model_url_map, interval=args.interval)
 
-    if os.path.exists(args.output):
-        os.remove(args.output)
-        print(f"Old CSV removed: {args.output}")
-
     print(f"Initialized {len(clients)} OpenAI clients:")
     for name, client in clients.items():
         base = getattr(client._client, "_base_url", "<custom>")
@@ -180,23 +233,39 @@ def main():
         os.makedirs(out_dir, exist_ok=True)
 
     model_names = list(clients.keys())
+    pattern = RequestPattern(args.pattern, args.rate)
 
     for prompt_id, prompt in prompts:
         model_name = random.choice(model_names)
         client = clients[model_name]
         gpu_id = model_to_gpu[model_name]
 
+        # Wait until concurrency limit allows a new request
+        while len([th for th in threads if th.is_alive()]) >= args.concurrency:
+            time.sleep(0.05)
+
+        # Launch request thread
         t = threading.Thread(
             target=handle_request,
-            args=(prompt_id, prompt, model_name, gpu_id, client, args, writer_lock),
+            args=(
+                prompt_id,
+                prompt,
+                model_name,
+                gpu_id,
+                client,
+                args,
+                writer_lock,
+                args.pattern,
+                args.rate,
+            ),
         )
         t.start()
         threads.append(t)
-        time.sleep(random.uniform(0.0, 0.05))  # small stagger
 
-        while len([th for th in threads if th.is_alive()]) >= args.concurrency:
-            time.sleep(0.1)
+        # Delay until next request arrival (based on pattern)
+        time.sleep(pattern.next_delay())
 
+    # Wait for all threads to finish
     for th in threads:
         th.join()
 

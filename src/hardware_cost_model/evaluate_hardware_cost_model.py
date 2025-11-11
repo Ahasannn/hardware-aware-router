@@ -13,7 +13,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 # -----------------------------
 # 1. Load dataset + preprocessor
 # -----------------------------
-CSV_PATH = "data/hw_dataset_qween.csv"
+CSV_PATH = "data/hw_dataset_qwen_sweep.csv"
 df = pd.read_csv(CSV_PATH)
 
 df["model_gpu"] = df["model_id"].astype(str) + "_" + df["gpu_id"].astype(str)
