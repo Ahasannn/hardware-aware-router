@@ -15,8 +15,5 @@ embedding = router.encode(query)
 quality = router.get_quality(embedding, "Mistral-7B-Instruct-v0.3")
 baseline_cost = router.get_cost(embedding, "Mistral-7B-Instruct-v0.3") * price['Mistral-7B-Instruct-v0.3']
 
-our_cost = baseline_cost + slo()
-
 print(f"Quality: {quality:.4f}, Cost: {cost:.1f}")
 
-score = qulity 
