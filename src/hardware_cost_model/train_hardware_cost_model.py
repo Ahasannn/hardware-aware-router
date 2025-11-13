@@ -19,7 +19,7 @@ from .model_utils import HardwareCostNet
 # -----------------------------
 # 1. Load and preprocess dataset
 # -----------------------------
-CSV_PATH = "data/hw_dataset_qwen_sweep.csv"
+CSV_PATH = "data/hw_dataset_qwen_sweep_with_output.csv"
 df = pd.read_csv(CSV_PATH)
 
 # Drop irrelevant columns

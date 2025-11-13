@@ -21,12 +21,16 @@ CUDA_VISIBLE_DEVICES=0 nohup python -m vllm.entrypoints.openai.api_server \
   --gpu-memory-utilization 0.4 \
   > logs/qwen0_0.5b.log 2>&1 &
 
+sleep 20
+
 CUDA_VISIBLE_DEVICES=0 nohup python -m vllm.entrypoints.openai.api_server \
   --model Qwen/Qwen2.5-1.5B-Instruct \
   --port 8006 \
   --host 0.0.0.0 \
   --gpu-memory-utilization 0.3 \
   > logs/qwen0_1.5b.log 2>&1 &
+
+sleep 20
 
 # ---------------------- GPU 1 ----------------------
 CUDA_VISIBLE_DEVICES=1 nohup python -m vllm.entrypoints.openai.api_server \
@@ -35,6 +39,8 @@ CUDA_VISIBLE_DEVICES=1 nohup python -m vllm.entrypoints.openai.api_server \
   --host 0.0.0.0 \
   --gpu-memory-utilization 0.3 \
   > logs/qwen1_0.5B-Chat-GPTQ-Int4.log 2>&1 &
+
+sleep 20
 
 CUDA_VISIBLE_DEVICES=1 nohup python -m vllm.entrypoints.openai.api_server \
   --model Qwen/Qwen2.5-0.5B-Instruct-AWQ \

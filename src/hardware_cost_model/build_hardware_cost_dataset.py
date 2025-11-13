@@ -23,7 +23,6 @@ CSV_FIELDS = [
     "ttft_s", "tpot_s_per_token", "latency_s",
     "d_tokens",
     "pattern_type", "arrival_rate",
-    "output_text",
 ]
 
 
@@ -65,14 +64,12 @@ def send_request_and_measure(openai_client, model_name, prompt):
     )
 
     first_token_time, total_tokens = None, 0
-    output_text = []
     for chunk in stream:
         if hasattr(chunk, "choices"):
             delta = chunk.choices[0].delta
             text = getattr(delta, "content", "")
             if text:
                 total_tokens += len(text.split())
-                output_text.append(text)
                 if first_token_time is None:
                     first_token_time = time.time()
 
@@ -86,7 +83,6 @@ def send_request_and_measure(openai_client, model_name, prompt):
         "tpot_s_per_token": tpot,
         "latency_s": latency,
         "d_tokens": total_tokens,
-        "output_text": "".join(output_text).strip(),
     }
 
 
@@ -139,7 +135,6 @@ def handle_request(
         **latency_info,
         "pattern_type": pattern_type,
         "arrival_rate": arrival_rate,
-        "output_text": latency_info["output_text"],
     }
 
     with writer_lock:
@@ -188,7 +183,7 @@ def main():
     )
     parser.add_argument(
         "--prompt_path",
-        default="src/data/mixed_prompts_final.parquet",
+        default="src/data/mixed_prompts_train.parquet",
         help="Path to combined prompt dataset (Parquet).",
     )
     parser.add_argument(
