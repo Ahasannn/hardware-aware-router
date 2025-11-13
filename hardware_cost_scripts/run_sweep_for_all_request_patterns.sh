@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-CONFIG="configs/gpu_model_map_qwen.yaml"
-OUTPUT="data/hw_dataset_qwen_sweep.csv"
+CONFIG="configs/phi3_mini_qwen14b.yaml"
+OUTPUT="data/dataset_phi3_mini_qwen14b.csv"
 NUM_PROMPTS=8000
-INTERVAL=0.3
-CONCURRENCY=16        # ≈8 per GPU → high but safe
+INTERVAL=0.5
+CONCURRENCY=16      
 
 mkdir -p logs
 
@@ -21,7 +21,7 @@ for RATE in 2 5 10; do
     --pattern poisson \
     --rate ${RATE} \
     --concurrency ${CONCURRENCY} \
-    >> ${LOGFILE} 2>&1
+    > ${LOGFILE} 2>&1
   echo "✅ Completed poisson rate=${RATE}"
 done
 
@@ -36,7 +36,7 @@ nohup python -m src.hardware_cost_model.build_hardware_cost_dataset \
   --pattern microburst \
   --rate 5 \
   --concurrency ${CONCURRENCY} \
-  >> ${LOGFILE} 2>&1
+  > ${LOGFILE} 2>&1
 echo "✅ Completed microburst (rate=5)"
 
 # 3️⃣ Sustained overload – heavy
@@ -50,7 +50,7 @@ nohup python -m src.hardware_cost_model.build_hardware_cost_dataset \
   --pattern sustained \
   --rate 10 \
   --concurrency ${CONCURRENCY} \
-  >> ${LOGFILE} 2>&1
+  > ${LOGFILE} 2>&1
 echo "✅ Completed sustained (rate=10)"
 
 echo "🎯 Sweep complete. Dataset appended to: ${OUTPUT}"

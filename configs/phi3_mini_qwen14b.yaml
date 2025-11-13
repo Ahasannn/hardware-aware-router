@@ -1,0 +1,7 @@
+gpus:
+  "0":
+    - name: /home/ah872032/models/qwen14b
+      base_url: http://localhost:8010
+
+    - name: /home/ah872032/models/phi3-mini
+      base_url: http://localhost:8011
