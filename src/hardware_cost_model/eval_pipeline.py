@@ -11,8 +11,10 @@ from .routers import (
 )
 from .cost_model import HardwareCostPredictor
 from .metrics_watcher import model_metrics
+from .metrics_watcher import start_metrics_watcher
 from .load_patterns import RequestPattern
-from carrot import load_carrot_router
+from baselines.carrot import load_carrot_router
+
 
 
 CSV_FIELDS = [
@@ -21,7 +23,6 @@ CSV_FIELDS = [
     "request_id", "timestamp", "prompt_id",
     "model_id", "gpu_id",
     "p_tokens", "d_tokens",
-    "running_req_count", "waiting_req_count", "kv_cache_usage_perc",
     "router_quality", "router_cost",
     "pred_ttft", "pred_tpot",
     "final_cost", "final_score",
@@ -59,15 +60,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     parser.add_argument("--prompt_path", default="data/prompts/mixed_prompts_eval.parquet")
-    parser.add_argument("--output", default="data/eval_results.csv")
+    parser.add_argument("--output", default="data/eval_results/eval_results.csv")
     parser.add_argument("--router", choices=["baseline", "random", "rr", "carrot"], required=True)
     parser.add_argument("--use_hw_cost", action="store_true")
     parser.add_argument("--cost_lambda", type=float, default=1.0)
     parser.add_argument("--num_prompts", type=int, default=50)
-    parser.add_argument("--pattern", default="poisson")
+    parser.add_argument("--concurrency", type=int, default=20)
+    parser.add_argument("--pattern", default="poisson",choices=["poisson", "microburst", "sustained"],)
     parser.add_argument("--rate", type=float, default=5.0)
+    parser.add_argument("--interval",type=float,default=0.3)
     parser.add_argument("--model_path", default="checkpoints/hardware_cost_model/model.pt")
     parser.add_argument("--preproc_path", default="checkpoints/hardware_cost_model/preproc.joblib")
+
     args = parser.parse_args()
 
     RUN_ID = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -84,8 +88,7 @@ def main():
         router = RoundRobinRouter()
     elif args.router == "carrot":
         carrot = load_carrot_router("checkpoints/carrot", model_type="linear")
-        prices = {}  # TODO fill your price-per-model here
-        router = CarrotRouter(carrot, prices)
+        router = CarrotRouter(carrot)
     else:
         raise ValueError("Invalid router")
 
@@ -102,16 +105,20 @@ def main():
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
 
-    clients, model_to_gpu = {}, {}
+    clients, model_to_gpu, model_url_map = {}, {}, {}
     for g, models in cfg["gpus"].items():
-        gid = int(g)
+        g_id = int(g)
         for m in models:
-            nm = m["name"]
-            base = m["base_url"].rstrip("/")
-            clients[nm] = OpenAI(base_url=f"{base}/v1", api_key="EMPTY")
-            model_to_gpu[nm] = gid
+            name = m["name"]
+            base_root = m["base_url"].rstrip("/")
+            openai_base = f"{base_root}/v1"
+            clients[name] = OpenAI(base_url=openai_base, api_key="EMPTY")
+            model_to_gpu[name] = g_id
+            model_url_map[name] = f"{base_root}/metrics"        
 
     model_names = list(clients.keys())
+    print("Starting metrics watcher...")
+    start_metrics_watcher(model_url_map, interval=args.interval)
 
     # ---------------------------------
     # Load prompts
@@ -159,9 +166,15 @@ def main():
                 "running_req_count": snap.get("num_requests_running", 0),
                 "waiting_req_count": snap.get("num_requests_waiting", 0),
                 "kv_cache_usage_perc": snap.get("kv_cache_usage_perc", 0.0),
+                "ttft_avg": snap.get("ttft_avg", 0.0),
+                "itl_avg": snap.get("itl_avg", 0.0),
+
+                # These two are needed ONLY to build model_gpu
                 "model_id": m,
-                "gpu_id": gpu,
+                "gpu_id": str(gpu),
             }
+
+            print(feat)
 
             # dynamic cost
             if args.use_hw_cost:
@@ -201,9 +214,6 @@ def main():
             "gpu_id": best_gpu,
             "p_tokens": p_tokens,
             "d_tokens": d_tokens,
-            "running_req_count": hw.get(best_model, {}).get("num_requests_running", 0),
-            "waiting_req_count": hw.get(best_model, {}).get("num_requests_waiting", 0),
-            "kv_cache_usage_perc": hw.get(best_model, {}).get("kv_cache_usage_perc", 0.0),
             "router_quality": best_router_quality,
             "router_cost": best_router_cost,
             "pred_ttft": best_pred_ttft,
@@ -230,8 +240,8 @@ def main():
     # ---------------------------------
     threads = []
     for i, prompt in enumerate(prompts):
-        while len([t for t in threads if t.is_alive()]) >= 10:
-            time.sleep(0.01)
+        while len([t for t in threads if t.is_alive()]) >= args.concurrency:
+            time.sleep(0.05)
 
         t = threading.Thread(target=worker, args=(i, prompt))
         threads.append(t)
