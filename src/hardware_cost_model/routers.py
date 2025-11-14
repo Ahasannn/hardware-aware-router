@@ -88,3 +88,9 @@ class CarrotRouter(BaseRouter):
         static_cost = static_cost * MODEL_PRICES.get(model_name, 1e-7)
 
         return q, static_cost
+
+    def length_predictor(self,model_name,prompt):
+        emb = self.carrot.encode(prompt)
+        length = self.carrot.get_cost(emb, model_name)
+        
+        return length

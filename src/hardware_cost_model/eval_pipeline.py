@@ -36,7 +36,8 @@ def send_request(client, model, prompt):
     stream = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
-        stream=True
+        stream=True,
+        max_tokens=1024
     )
 
     first, ntoks = None, 0
@@ -55,6 +56,49 @@ def send_request(client, model, prompt):
     return ttft, tpot, lat, ntoks
 
 
+def start_gpu_monitor(model_to_gpu, gpu_stats_list, interval=0.2):
+    """
+    Continuously records per-GPU utilization based on model_metrics.
+    Saves:
+        running_req = sum of running requests for all models on same GPU
+        waiting_req = sum of waiting requests
+        kv_cache_usage = max KV usage among models on same GPU
+    """
+
+    def monitor():
+        import time
+        gpu_ids = sorted(set(model_to_gpu.values()))
+        while True:
+            now = time.time()
+            for gid in gpu_ids:
+                running = 0
+                waiting = 0
+                kv_cache = 0.0
+
+                # aggregate model-level metrics into GPU-level
+                for model, mapped_gpu in model_to_gpu.items():
+                    if mapped_gpu != gid:
+                        continue
+                    snap = model_metrics.get(model, {})
+                    running += snap.get("num_requests_running", 0)
+                    waiting += snap.get("num_requests_waiting", 0)
+                    kv_cache = max(kv_cache, snap.get("kv_cache_usage_perc", 0.0))
+
+                gpu_stats_list.append({
+                    "timestamp": now,
+                    "gpu_id": gid,
+                    "running_req": running,
+                    "waiting_req": waiting,
+                    "kv_cache_usage": kv_cache,
+                })
+
+            time.sleep(interval)
+
+    t = threading.Thread(target=monitor, daemon=True)
+    t.start()
+
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -68,7 +112,7 @@ def main():
     parser.add_argument("--concurrency", type=int, default=20)
     parser.add_argument("--pattern", default="poisson",choices=["poisson", "microburst", "sustained"],)
     parser.add_argument("--rate", type=float, default=5.0)
-    parser.add_argument("--interval",type=float,default=0.3)
+    parser.add_argument("--interval",type=float,default=0.5)
     parser.add_argument("--model_path", default="checkpoints/hardware_cost_model/model.pt")
     parser.add_argument("--preproc_path", default="checkpoints/hardware_cost_model/preproc.joblib")
 
@@ -80,6 +124,8 @@ def main():
     # ---------------------------------
     # Load router
     # ---------------------------------
+    carrot = CarrotRouter(load_carrot_router("checkpoints/carrot", model_type="linear"))
+
     if args.router == "baseline":
         router = BaselineRouter()
     elif args.router == "random":
@@ -87,8 +133,7 @@ def main():
     elif args.router == "rr":
         router = RoundRobinRouter()
     elif args.router == "carrot":
-        carrot = load_carrot_router("checkpoints/carrot", model_type="linear")
-        router = CarrotRouter(carrot)
+        router = carrot
     else:
         raise ValueError("Invalid router")
 
@@ -117,8 +162,17 @@ def main():
             model_url_map[name] = f"{base_root}/metrics"        
 
     model_names = list(clients.keys())
+
+
     print("Starting metrics watcher...")
     start_metrics_watcher(model_url_map, interval=args.interval)
+
+    # ---------------------------------
+    # Start GPU Utilization Monitor
+    # ---------------------------------
+    gpu_stats = []
+    print("[Eval] Starting GPU utilization monitor...")
+    start_gpu_monitor(model_to_gpu, gpu_stats, interval=1)
 
     # ---------------------------------
     # Load prompts
@@ -159,6 +213,8 @@ def main():
 
             # router scores
             r_quality, r_cost = router.compute(m, prompt)
+            #predicted_length = carrot.length_predictor(m,prompt)
+            predicted_length = 100
 
             # hw features
             feat = {
@@ -179,11 +235,12 @@ def main():
             # dynamic cost
             if args.use_hw_cost:
                 pred_ttft, pred_tpot = cost_predictor(m, feat)
-                dyn_cost = pred_ttft + pred_tpot
+                dyn_cost = pred_ttft + predicted_length*pred_tpot
                 final_cost = dyn_cost
             else:
                 pred_ttft = pred_tpot = 0
-                final_cost = r_cost
+                #final_cost = r_cost
+                final_cost = 0
 
             score = r_quality - args.cost_lambda * final_cost
 
@@ -251,6 +308,11 @@ def main():
     for t in threads:
         t.join()
 
+
+    gpu_out = args.output.replace(".csv", "_gpu_util.csv")
+    pd.DataFrame(gpu_stats).to_csv(gpu_out, index=False)
+    print(f"[Eval] GPU utilization stats saved → {gpu_out}")
+    
     print(f"[Eval] Done → saved to {args.output}")
 
 
