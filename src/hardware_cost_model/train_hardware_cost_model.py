@@ -14,6 +14,11 @@ from sklearn.compose import ColumnTransformer
 from torch.utils.data import DataLoader, TensorDataset
 from joblib import dump
 from .model_utils import HardwareCostNet
+from model_maps import (
+    get_model_id,
+    ID_TO_LOCAL_MODEL,
+    ID_TO_HF_MODEL,
+)
 
 
 # -----------------------------
@@ -26,7 +31,7 @@ df = pd.read_csv(CSV_PATH)
 df = df.drop(columns=["request_id", "timestamp", "prompt_id", "latency_s", "e2e_avg"], errors="ignore")
 
 # Combine model_id + gpu_id
-df["model_gpu"] = df["model_id"].astype(str) + "_" + df["gpu_id"].astype(str)
+df["model_gpu"] = get_model_id(df["model_id"]).astype(str) + "_" + df["gpu_id"].astype(str)
 df = df.drop(columns=["gpu_id"], errors="ignore")
 
 # Log-scale targets

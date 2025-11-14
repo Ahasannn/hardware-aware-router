@@ -7,7 +7,6 @@ realistic arrival patterns using RequestPattern.
 
 import argparse, csv, os, random, time, uuid, yaml, datetime, torch, threading
 from openai import OpenAI
-from datasets import load_dataset  # keep for future if needed
 import pandas as pd
 from .metrics_watcher import start_metrics_watcher, model_metrics
 from .load_patterns import RequestPattern
@@ -100,10 +99,6 @@ def handle_request(
     arrival_rate,
 ):
     """Single threaded worker that sends one request and logs result."""
-    try:
-        gpu_name = torch.cuda.get_device_name(gpu_id)
-    except Exception:
-        gpu_name = f"GPU-{gpu_id}"
 
     p_tokens = len(prompt.split())
 
@@ -128,7 +123,7 @@ def handle_request(
         "timestamp": datetime.datetime.now().isoformat(),
         "prompt_id": prompt_id,
         "model_id": model_name,
-        "gpu_id": gpu_name,
+        "gpu_id": gpu_id,
         "p_tokens": p_tokens,
         "d_tokens": latency_info["d_tokens"],
         **metrics_snapshot,
