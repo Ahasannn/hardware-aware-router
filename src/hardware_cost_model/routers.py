@@ -5,17 +5,19 @@ import random
 
 # Simple quality proxy for baseline router (extend as needed)
 MODEL_QUALITY = {
-    "Qwen/Qwen1.5-0.5B": 0.5,
-    "Qwen/Qwen2.5-1.5B-Instruct": 1.5,
-    "Qwen/Qwen1.5-0.5B-Chat-GPTQ-Int4": 0.45,
-    "Qwen/Qwen2.5-0.5B-Instruct-AWQ": 0.5,
+    "Qwen/Qwen2.5-14B-Instruct" : .14,
+    "microsoft/Phi-3-mini-128k-instruct" : .3,
+    "meta-llama/Llama-3.1-8B-Instruct" : .8,
+    "Qwen/Qwen2.5-3B-Instruct" : .3,
+    "mistralai/Mistral-7B-Instruct-v0.3" : .7
 }
 
 MODEL_PRICES = {
-    "Qwen/Qwen1.5-0.5B": 0.045 / 100000,
-    "Qwen/Qwen2.5-1.5B-Instruct": 0.070 / 100000,
-    "Qwen/Qwen1.5-0.5B-Chat-GPTQ-Int4": 0.0032 / 100000,
-    "Qwen/Qwen2.5-0.5B-Instruct-AWQ": 0.0040 / 100000,
+    "Qwen/Qwen2.5-14B-Instruct" : 0.22 / 1000000,
+    "microsoft/Phi-3-mini-128k-instruct" : .10 / 1000000,
+    "meta-llama/Llama-3.1-8B-Instruct" : 0.03 / 1000000,
+    "Qwen/Qwen2.5-3B-Instruct" : 0.05 / 1000000,
+    "mistralai/Mistral-7B-Instruct-v0.3" : 0.20 / 1000000
 }
 
 # ============================================================
@@ -79,12 +81,10 @@ class CarrotRouter(BaseRouter):
         emb = self.carrot.encode(prompt)
 
         # CARROT quality
-        #q = self.carrot.get_quality(emb, model_name)
-        q = 0.5
+        q = self.carrot.get_quality(emb, model_name)
 
         # CARROT cost (static)
-        #static_cost = self.carrot.get_cost(emb, model_name)
-        static_cost = 0.5
+        static_cost = self.carrot.get_cost(emb, model_name)
         static_cost = static_cost * MODEL_PRICES.get(model_name, 1e-7)
 
         return q, static_cost
