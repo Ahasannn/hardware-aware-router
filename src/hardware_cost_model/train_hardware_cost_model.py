@@ -14,7 +14,7 @@ from sklearn.compose import ColumnTransformer
 from torch.utils.data import DataLoader, TensorDataset
 from joblib import dump
 from .model_utils import HardwareCostNet
-from model_maps import (
+from .model_maps import (
     get_model_id,
     ID_TO_LOCAL_MODEL,
     ID_TO_HF_MODEL,
@@ -24,15 +24,20 @@ from model_maps import (
 # -----------------------------
 # 1. Load and preprocess dataset
 # -----------------------------
-CSV_PATH = "data/hw_dataset_qwen_sweep_with_output.csv"
+CSV_PATH = "data/h100_full_sweep.csv"
 df = pd.read_csv(CSV_PATH)
 
 # Drop irrelevant columns
 df = df.drop(columns=["request_id", "timestamp", "prompt_id", "latency_s", "e2e_avg"], errors="ignore")
 
 # Combine model_id + gpu_id
-df["model_gpu"] = get_model_id(df["model_id"]).astype(str) + "_" + df["gpu_id"].astype(str)
+df["model_id"] = df["model_id"].map(get_model_id)
+df["model_gpu"] = df["model_id"].astype(int).astype(str) + "_" + df["gpu_id"].astype(str)
 df = df.drop(columns=["gpu_id"], errors="ignore")
+
+if df["model_id"].isna().any():
+    missing = df[df["model_id"].isna()]["model_id"].unique()
+    raise ValueError(f"❌ Unknown model names in CSV: {missing}")
 
 # Log-scale targets
 df["ttft_s"] = df["ttft_s"].clip(lower=1e-4)
@@ -64,7 +69,7 @@ print(f"✅ Preprocessing done | Features={X.shape[1]} | Train={len(X_train)} | 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"🧠 Using device: {device}")
 
-def to_loader(X, y, batch=256, shuffle=True):
+def to_loader(X, y, batch=1024, shuffle=True):
     X_t = torch.tensor(X, dtype=torch.float32)
     y_t = torch.tensor(y, dtype=torch.float32)
     return DataLoader(TensorDataset(X_t, y_t), batch_size=batch, shuffle=shuffle)
@@ -73,13 +78,13 @@ train_loader = to_loader(X_train, y_train)
 val_loader = to_loader(X_val, y_val, shuffle=False)
 
 model = HardwareCostNet(X.shape[1]).to(device)
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=1e-4)
 loss_fn = nn.MSELoss()
 
 # -----------------------------
 # 3. Training loop
 # -----------------------------
-for epoch in range(25):
+for epoch in range(50):
     model.train()
     total_loss = 0
     for xb, yb in train_loader:
