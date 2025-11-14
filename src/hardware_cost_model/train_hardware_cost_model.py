@@ -16,8 +16,7 @@ from joblib import dump
 from .model_utils import HardwareCostNet
 from .model_maps import (
     get_model_id,
-    ID_TO_LOCAL_MODEL,
-    ID_TO_HF_MODEL,
+    get_model_hugging_face_name
 )
 
 

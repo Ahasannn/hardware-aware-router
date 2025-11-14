@@ -15,8 +15,7 @@ from baselines.carrot import load_carrot_router
 
 from .model_maps import (
     get_model_id,
-    ID_TO_LOCAL_MODEL,
-    ID_TO_HF_MODEL,
+    get_model_hugging_face_name
 )
 
 # -------------------------
@@ -234,9 +233,10 @@ def main():
         for m in model_names:
             gpu = model_to_gpu[m]
             snap = hw.get(m, {})
+            m_hugging_face_name = get_model_hugging_face_name(m)
 
             # router's intrinsic quality & static cost
-            r_quality, r_cost = router.compute(m, prompt)
+            r_quality, r_cost = router.compute(m_hugging_face_name, prompt)
 
             # Router-only score (no HW cost)
             router_only_score = r_quality - args.cost_lambda * r_cost
@@ -280,7 +280,7 @@ def main():
 
                 # predict length via carrot (fallback to 100 if anything fails)
                 try:
-                    predicted_length = int(carrot_router.length_predictor(m, prompt))
+                    predicted_length = int(carrot_router.length_predictor(m_hugging_face_name, prompt))
                 except Exception:
                     predicted_length = 100
 
@@ -336,7 +336,7 @@ def main():
             "prompt_id": pid,
 
             # Router-only choice
-            "router_only_model": router_only_choice["model"],
+            "router_only_model": get_model_hugging_face_name(router_only_choice["model"]),
             "router_only_gpu_id": router_only_choice["gpu"],
             "router_only_quality": router_only_choice["quality"],
             "router_only_cost": router_only_choice["cost"],
@@ -346,7 +346,7 @@ def main():
             "router_only_hw_kv_cache": router_only_choice["hw_kv"],
 
             # HW-aware (selected) choice
-            "selected_model": hw_choice["model"],
+            "selected_model": get_model_hugging_face_name(hw_choice["model"]),
             "selected_gpu_id": hw_choice["gpu"],
             "selected_quality": hw_choice["quality"],
             "selected_cost": hw_choice["cost"],
