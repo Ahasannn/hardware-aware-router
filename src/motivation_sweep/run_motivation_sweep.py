@@ -85,10 +85,19 @@ def run_motivation_sweep(
     # Prompts (shuffle + limit)
     # -------------------------
     df = pd.read_parquet(prompt_path)
-    df = df.sample(frac=1.0, random_state=42)          # NEW
-    df = df.head(min(len(df), num_prompts))            # NEW
+
+    # MUST contain: prompt, embedding (list or np array)
+    if "carrot_emb" not in df.columns:
+        raise ValueError("Your parquet file must contain `embedding` column.")
+
+    # Shuffle & limit
+    df = df.sample(frac=1.0, random_state=42).head(num_prompts)
+
+    # Store lists
     prompts = df["prompt"].tolist()
+    embeddings = df["carrot_emb"].tolist()       # <-- NEW
     N = len(prompts)
+
 
     final_results = []
 
@@ -99,7 +108,9 @@ def run_motivation_sweep(
 
         print(f"\n========== Running λ = {rate} ==========")
 
-        pattern = RequestPattern("poisson", rate)
+        #pattern = RequestPattern("poisson", rate)
+        pattern = RequestPattern("microburst", rate)
+        
 
         # Stats
         model_dist = Counter()
@@ -132,7 +143,8 @@ def run_motivation_sweep(
 
                 for m in model_names:
                     hf_name = get_model_hugging_face_name(m)
-                    quality, cost = carrot_router.compute(hf_name, prompt)
+                    emb = np.array(embeddings[pid])
+                    quality, cost = carrot_router.compute_from_embedding(hf_name, emb)
                     score = quality - cost
                     if score > best_score:
                         best_score = score
@@ -227,13 +239,24 @@ def run_motivation_sweep(
         print(json.dumps(result, indent=2))
         final_results.append(result)
 
+        # -----------------------------------------
+        # Save after every arrival_rate (append)
+        # -----------------------------------------
+        output_dir = os.path.dirname(output_csv)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+
+        df_tmp = pd.DataFrame([result])
+
+        # If file does not exist → write header
+        if not os.path.isfile(output_csv):
+            df_tmp.to_csv(output_csv, index=False)
+        else:
+            df_tmp.to_csv(output_csv, mode='a', header=False, index=False)
+
+        print(f"✔ Saved partial result for λ={rate} → {output_csv}")
 
 
-    output_dir = os.path.dirname(output_csv)
-    if output_dir:
-       os.makedirs(output_dir, exist_ok=True)
-    # Save
-    pd.DataFrame(final_results).to_csv(output_csv, index=False)
     print(f"\nSaved motivation sweep → {output_csv}")
 
 
@@ -244,12 +267,12 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/gpu_model_map_h100.yaml")
-    parser.add_argument("--prompt_path", default="data/prompts/mixed_prompts_eval.parquet")
+    parser.add_argument("--prompt_path", default="data/prompts/mixed_prompts_eval_with_prompt_embeddings.parquet")
     parser.add_argument("--output", default="data/motivation_sweep.csv")
     parser.add_argument("--concurrency", type=int, default=120)
-    parser.add_argument("--interval", type=float, default=0.1)
-    parser.add_argument("--arrival_rates", nargs="+", type=float, default=[10,20,100])
-    parser.add_argument("--num_prompts", type=int, default=50)     
+    parser.add_argument("--interval", type=float, default=0.2)
+    parser.add_argument("--arrival_rates", nargs="+", type=float, default=[3,9,6,12,15,18])
+    parser.add_argument("--num_prompts", type=int, default=300)     
     args = parser.parse_args()
 
     run_motivation_sweep(

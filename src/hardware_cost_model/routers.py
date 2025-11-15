@@ -77,20 +77,40 @@ class CarrotRouter(BaseRouter):
         """
         self.carrot = carrot_model
 
+    # ---------------------------------------------------------
+    # OLD: text-based compute (kept for compatibility)
+    # ---------------------------------------------------------
     def compute(self, model_name, prompt):
-        emb = self.carrot.encode(prompt)
+        emb = self.carrot.encode(prompt)             # SLOW → only used if needed
+        return self.compute_from_embedding(model_name, emb)
 
-        # CARROT quality
+    # ---------------------------------------------------------
+    # NEW FAST PATH: embedding-based compute
+    # ---------------------------------------------------------
+    def compute_from_embedding(self, model_name, emb):
+        """
+        emb: numpy array (precomputed embedding)
+        """
+
+        # CARROT predicted quality
         q = self.carrot.get_quality(emb, model_name)
 
-        # CARROT cost (static)
+        # CARROT predicted token count (static cost)
         static_cost = self.carrot.get_cost(emb, model_name)
+
+        # Convert cost = tokens * USD/token
         static_cost = static_cost * MODEL_PRICES.get(model_name, 1e-7)
 
         return q, static_cost
 
-    def length_predictor(self,model_name,prompt):
-        emb = self.carrot.encode(prompt)
-        length = self.carrot.get_cost(emb, model_name)
-        
-        return length
+    # ---------------------------------------------------------
+    # Length predictor (updated to use either embedding or text)
+    # ---------------------------------------------------------
+    def length_predictor(self, model_name, prompt=None, emb=None):
+        """
+        Either provide prompt (slow) OR emb (fast).
+        """
+        if emb is None:
+            emb = self.carrot.encode(prompt)
+        return self.carrot.get_cost(emb, model_name)
+
