@@ -2,12 +2,13 @@
 Precompute CARROT embeddings for all prompts in the eval dataset.
 
 Output:
-    mixed_prompts_eval_with_prompt_embeddings.parquet
+    mixed_prompts_eval_prompt_embeddings.parquet
 
-This file contains:
-    - prompt
-    - truncated_prompt (<=512 tokens)
-    - carrot_emb (embedding vector as list)
+This file contains ONLY:
+    - prompt_id
+    - carrot_emb (list of floats)
+
+Use this as a lookup table to avoid re-embedding prompts during evaluation.
 """
 
 import pandas as pd
@@ -16,74 +17,67 @@ from tqdm import tqdm
 import argparse
 import torch
 
-MAX_TOKENS = 512
 ENCODER_MODEL = "all-MiniLM-L6-v2"   # CARROT encoder
-
-
-def truncate_prompt(text, max_tokens=MAX_TOKENS):
-    words = text.split()
-    if len(words) > max_tokens:
-        return " ".join(words[:max_tokens])
-    return text
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default="data/prompts/mixed_prompts_eval.parquet")
-    parser.add_argument("--output", default="data/prompts/mixed_prompts_eval_with_prompt_embeddings.parquet")
+    parser.add_argument("--output", default="data/prompts/mixed_prompts_eval_prompt_embeddings.parquet")
     args = parser.parse_args()
 
     # -----------------------------------------------------
     # Load data
     # -----------------------------------------------------
     print(f"📂 Loading prompts: {args.input}")
-    df = pd.read_parquet(args.input) if args.input.endswith(".parquet") else pd.read_csv(args.input)
+    df = pd.read_parquet(args.input)
     print(f"   Loaded {len(df)} prompts")
 
-    # -----------------------------------------------------
-    # Truncate prompts
-    # -----------------------------------------------------
-    print(f"✂️  Truncating prompts to {MAX_TOKENS} tokens")
-    df["truncated_prompt"] = df["prompt"].apply(truncate_prompt)
+    # Must contain "prompt" and "prompt_id"
+    if "prompt_id" not in df.columns:
+        df = df.reset_index().rename(columns={"index": "prompt_id"})
 
     # -----------------------------------------------------
-    # Load GPU encoder
+    # Load encoder
     # -----------------------------------------------------
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"🔌 Loading encoder: {ENCODER_MODEL}  (device={device})")
+    print(f"🔌 Loading encoder: {ENCODER_MODEL} (device={device})")
 
     encoder = SentenceTransformer(ENCODER_MODEL, device=device)
 
     # -----------------------------------------------------
-    # Encode prompts on GPU
+    # Encode prompts
     # -----------------------------------------------------
-    print("⚡ Encoding prompts on GPU ...")
+    print("⚡ Encoding full prompts (no truncation) ...")
 
     embeddings = []
-    for p in tqdm(df["truncated_prompt"], desc="Encoding", ncols=80):
+    for p in tqdm(df["prompt"], desc="Encoding", ncols=80):
         emb = encoder.encode(p, convert_to_numpy=True)
-        embeddings.append(emb.tolist())   # save as python list (parquet-friendly)
+        embeddings.append(emb.tolist())
 
-    df["carrot_emb"] = embeddings
+    # -----------------------------------------------------
+    # Build OUTPUT LOOKUP table
+    # ONLY keep (prompt_id, carrot_emb)
+    # -----------------------------------------------------
+    out_df = pd.DataFrame({
+        "prompt_id": df["prompt_id"].astype(str),
+        "carrot_emb": embeddings
+    })
 
     # -----------------------------------------------------
     # Save output
     # -----------------------------------------------------
-    print(f"💾 Saving to {args.output}")
-    if args.output.endswith(".parquet"):
-        df.to_parquet(args.output, index=False)
-    else:
-        df.to_csv(args.output, index=False)
+    print(f"💾 Saving lookup table → {args.output}")
+    out_df.to_parquet(args.output, index=False)
 
     # -----------------------------------------------------
-    # Show sample rows
+    # Show sample
     # -----------------------------------------------------
-    print("\n================ SAMPLE SAVED ROWS (10) ================")
-    sample = df.head(10).copy()
-    # Don't print huge embeddings
+    print("\n================ SAMPLE SAVED ROWS (5) ================")
+    sample = out_df.head(5).copy()
     sample["carrot_emb"] = sample["carrot_emb"].apply(lambda x: f"[len={len(x)}]")
     print(sample.to_string(index=False))
-    print("========================================================\n")
+    print("=======================================================\n")
 
     print("✅ Finished computing + saving embeddings.")
 

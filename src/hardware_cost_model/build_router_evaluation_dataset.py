@@ -1,5 +1,5 @@
 """
-build_router_evaluation_dataset.py
+build_router_evaluation_dataset
 """
 
 import argparse, csv, os, random, time, uuid, yaml, datetime, torch, threading
@@ -145,18 +145,18 @@ def main():
     )
     parser.add_argument(
         "--config",
-        required=True,
+        default="configs/gpu_model_map_h100.yaml",
         help="Path to GPU-Model YAML map.",
     )
     parser.add_argument(
         "--output",
-        default="data/hw_dataset.csv",
+        default="data/evaluation_dataset.csv",
         help="Path to output CSV file.",
     )
     parser.add_argument(
         "--num_prompts",
         type=int,
-        default=20,
+        default=5,
         help="Number of prompts to sample and send.",
     )
     parser.add_argument(
@@ -185,7 +185,7 @@ def main():
     parser.add_argument(
         "--rate",
         type=float,
-        default=15,
+        default=18,
         help="Base arrival rate (requests per second).",
     )
     args = parser.parse_args()
