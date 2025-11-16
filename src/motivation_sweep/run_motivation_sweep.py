@@ -48,10 +48,20 @@ def run_motivation_sweep(
         config,
         prompt_path,
         arrival_rates,
-        concurrency,
+        concurrency,      # interpreted as *base* concurrency for the smallest λ
         interval,
         output_csv,
-        num_prompts):            # NEW
+        num_prompts,
+        pattern_name      # NEW: explicit pattern
+    ):
+    """
+    Run CARROT-based routing under different arrival rates and record
+    per-model waiting queue, KV-cache, and latency.
+
+    concurrency: base concurrency used at min(arrival_rates).
+                 For larger λ, we scale up concurrency ∝ λ / min(λ).
+    """
+
     # -------------------------
     # Load config
     # -------------------------
@@ -86,18 +96,20 @@ def run_motivation_sweep(
     # -------------------------
     df = pd.read_parquet(prompt_path)
 
-    # MUST contain: prompt, embedding (list or np array)
+    # MUST contain: prompt, carrot_emb (list or np array)
     if "carrot_emb" not in df.columns:
-        raise ValueError("Your parquet file must contain `embedding` column.")
+        raise ValueError("Your parquet file must contain `carrot_emb` column.")
 
     # Shuffle & limit
     df = df.sample(frac=1.0, random_state=42).head(num_prompts)
 
-    # Store lists
     prompts = df["prompt"].tolist()
-    embeddings = df["carrot_emb"].tolist()       # <-- NEW
+    embeddings = df["carrot_emb"].tolist()   # list of lists
     N = len(prompts)
 
+    # For scaling concurrency with load
+    min_rate = min(arrival_rates)
+    MAX_THREADS = 256  # hard cap for safety
 
     final_results = []
 
@@ -105,20 +117,23 @@ def run_motivation_sweep(
     # Sweep through arrival rates
     # ============================================================
     for rate in arrival_rates:
+        print(f"\n========== Running λ = {rate} (pattern={pattern_name}) ==========")
 
-        print(f"\n========== Running λ = {rate} ==========")
+        # Poisson / sustained / microburst pattern
+        pattern = RequestPattern(pattern_name, rate)
 
-        #pattern = RequestPattern("poisson", rate)
-        pattern = RequestPattern("microburst", rate)
-        
+        # Scale concurrency with λ
+        # base_concurrency is for min_rate; larger λ => more threads
+        effective_concurrency = int(concurrency * (rate / min_rate))
+        effective_concurrency = max(4, min(effective_concurrency, MAX_THREADS))
+
+        print(f"[INFO] Using effective_concurrency = {effective_concurrency}")
 
         # Stats
         model_dist = Counter()
         gpu_dist = Counter()
 
-        total_waited = 0
-        model_wait_lists = defaultdict(list)     # NEW
-
+        model_wait_lists = defaultdict(list)
         kv_obs = defaultdict(list)
         latencies = []
 
@@ -128,8 +143,6 @@ def run_motivation_sweep(
         # Worker
         # -------------------------
         def worker():
-            nonlocal total_waited
-
             while True:
                 item = q.get()
                 if item is None:
@@ -137,13 +150,14 @@ def run_motivation_sweep(
 
                 pid, prompt = item
 
-                # choose model via Carrot
+                # choose model via CARROT using precomputed emb
                 best_score = -1e9
                 chosen = None
 
+                emb = np.array(embeddings[pid])
+
                 for m in model_names:
                     hf_name = get_model_hugging_face_name(m)
-                    emb = np.array(embeddings[pid])
                     quality, cost = carrot_router.compute_from_embedding(hf_name, emb)
                     score = quality - cost
                     if score > best_score:
@@ -158,10 +172,7 @@ def run_motivation_sweep(
                 waiting = snap.get("num_requests_waiting", 0)
                 kv = snap.get("kv_cache_usage_perc", 0.0)
 
-                if waiting > 0:
-                    total_waited += waiting
-                model_wait_lists[model_name].append(waiting)   # NEW
-
+                model_wait_lists[model_name].append(waiting)
                 kv_obs[model_name].append(kv)
 
                 # issue request
@@ -177,12 +188,12 @@ def run_motivation_sweep(
         # Thread pool
         # -------------------------
         threads = []
-        for _ in range(concurrency):
-            t = threading.Thread(target=worker)
+        for _ in range(effective_concurrency):
+            t = threading.Thread(target=worker, daemon=True)
             t.start()
             threads.append(t)
 
-        # feed requests with Poisson delay
+        # feed requests with pattern-driven delay
         for i, prompt in enumerate(prompts):
             q.put((i, prompt))
             time.sleep(pattern.next_delay())
@@ -194,16 +205,12 @@ def run_motivation_sweep(
             t.join()
 
         # aggregate stats
-        avg_kv = {m: float(np.mean(v)) if v else 0.0 for m, v in kv_obs.items()}
-        avg_wait = {m: float(np.mean(v)) if v else 0.0 for m, v in model_wait_lists.items()}   # NEW
-
-        # Convert model names to HF names for nicer output
         hf_model_dist = {}
         hf_avg_wait = {}
         hf_avg_kv = {}
 
         for m in model_names:
-            hf = get_model_hugging_face_name(m)   # <-- NEW
+            hf = get_model_hugging_face_name(m)
 
             # model_distribution: fill missing with 0
             hf_model_dist[hf] = model_dist.get(m, 0)
@@ -216,12 +223,10 @@ def run_motivation_sweep(
             kvs = kv_obs.get(m, [])
             hf_avg_kv[hf] = float(np.mean(kvs)) if kvs else 0.0
 
-
         result = {
             "arrival_rate": rate,
             "num_requests": N,
 
-            # HF names instead of ugly local paths
             "model_distribution": hf_model_dist,
             "gpu_distribution": dict(gpu_dist),
 
@@ -233,7 +238,10 @@ def run_motivation_sweep(
 
             # Latency
             "avg_latency": float(np.mean(latencies)) if latencies else 0.0,
-            "p95_latency": float(np.percentile(latencies, 95)) if latencies else 0.0
+            "p95_latency": float(np.percentile(latencies, 95)) if latencies else 0.0,
+
+            "arrival_pattern": pattern_name,
+            "effective_concurrency": effective_concurrency,
         }
 
         print(json.dumps(result, indent=2))
@@ -256,7 +264,6 @@ def run_motivation_sweep(
 
         print(f"✔ Saved partial result for λ={rate} → {output_csv}")
 
-
     print(f"\nSaved motivation sweep → {output_csv}")
 
 
@@ -268,11 +275,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/gpu_model_map_h100.yaml")
     parser.add_argument("--prompt_path", default="data/prompts/mixed_prompts_eval_with_prompt_embeddings.parquet")
-    parser.add_argument("--output", default="data/motivation_sweep.csv")
-    parser.add_argument("--concurrency", type=int, default=120)
+    parser.add_argument("--output", default="data/motivation_sweep_final_2.csv")
+
+    # This is *base* concurrency at the smallest λ
+    parser.add_argument("--concurrency", type=int, default=80)
+
     parser.add_argument("--interval", type=float, default=0.2)
-    parser.add_argument("--arrival_rates", nargs="+", type=float, default=[3,9,6,12,15,18])
-    parser.add_argument("--num_prompts", type=int, default=300)     
+    parser.add_argument("--arrival_rates", nargs="+", type=float, default=[2, 5, 10, 20, 40, 60, 80])
+    parser.add_argument("--num_prompts", type=int, default=300)
+    parser.add_argument(
+        "--pattern",
+        default="sustained",
+        choices=["poisson", "microburst", "sustained"],
+        help="Request arrival pattern type.",
+    )
     args = parser.parse_args()
 
     run_motivation_sweep(
@@ -282,5 +298,6 @@ if __name__ == "__main__":
         concurrency=args.concurrency,
         interval=args.interval,
         output_csv=args.output,
-        num_prompts=args.num_prompts         
+        num_prompts=args.num_prompts,
+        pattern_name=args.pattern,
     )
