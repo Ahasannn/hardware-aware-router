@@ -427,15 +427,15 @@ class CarrotRouter:
         if single_query:
             query = [query]
 
-        MAX_TOKENS = 512
+        # MAX_TOKENS = 512
 
-        def _truncate(txt):
-            words = txt.split()
-            if len(words) > MAX_TOKENS:
-                return " ".join(words[:MAX_TOKENS])
-            return txt
+        # def _truncate(txt):
+        #     words = txt.split()
+        #     if len(words) > MAX_TOKENS:
+        #         return " ".join(words[:MAX_TOKENS])
+        #     return txt
 
-        query = [_truncate(q) for q in query]
+        # query = [_truncate(q) for q in query]
 
         embeddings = self.encoder.encode(query, convert_to_numpy=True)
 
