@@ -132,3 +132,21 @@ CUDA_VISIBLE_DEVICES=0 nohup python -m vllm.entrypoints.openai.api_server \
   --port 8012 \
   --host 0.0.0.0 \
   > logs/gpu0_mistral7b.log 2>&1 &
+
+
+
+  CUDA_VISIBLE_DEVICES=0 nohup python -m vllm.entrypoints.openai.api_server \
+  --model ~/models/qwen14b \
+  --max-model-len 21000 \
+  --gpu-memory-utilization 0.55 \
+  --port 8010 \
+  --host 0.0.0.0 \
+  > logs/gpu0_qwen2.5_14b.log 2>&1 &
+
+  CUDA_VISIBLE_DEVICES=0 nohup python -m vllm.entrypoints.openai.api_server \
+  --model ~/models/phi3-mini \
+  --max-model-len 21000 \
+  --gpu-memory-utilization 0.25 \
+  --port 8011 \
+  --host 0.0.0.0 \
+  > logs/gpu0_phi3_mini.log 2>&1 &
