@@ -13,9 +13,9 @@ from src.hardware_cost_model.load_patterns import RequestPattern
 from src.hardware_cost_model.model_maps import get_model_id, get_model_hugging_face_name
 
 
-# -------------------------
-# Send request (same logic)
-# -------------------------
+# ============================================================
+# Send request
+# ============================================================
 def send_request(client, model, prompt):
     start = time.time()
     stream = client.chat.completions.create(
@@ -38,33 +38,31 @@ def send_request(client, model, prompt):
     ttft = max((first - start), 0) if first else 0
     lat = end - start
     tpot = (lat - ttft) / max(ntoks, 1) if ttft > 0 else 0
+
     return ttft, tpot, lat, ntoks
 
 
-# -------------------------
+# ============================================================
 # Motivation Sweep
-# -------------------------
+# ============================================================
 def run_motivation_sweep(
         config,
         prompt_path,
         arrival_rates,
-        concurrency,      # interpreted as *base* concurrency for the smallest λ
+        concurrency,
         interval,
         output_csv,
         num_prompts,
-        pattern_name      # NEW: explicit pattern
+        pattern_name
     ):
     """
-    Run CARROT-based routing under different arrival rates and record
-    per-model waiting queue, KV-cache, and latency.
-
-    concurrency: base concurrency used at min(arrival_rates).
-                 For larger λ, we scale up concurrency ∝ λ / min(λ).
+    Fixed concurrency.
+    Records: per-model latency, TTFT, TPOT, p95, KV-cache, waiting, distribution.
     """
 
-    # -------------------------
+    # --------------------------------------------------------
     # Load config
-    # -------------------------
+    # --------------------------------------------------------
     with open(config, "r") as f:
         cfg = yaml.safe_load(f)
 
@@ -83,79 +81,69 @@ def run_motivation_sweep(
             model_names.append(name)
             model_url_map[name] = f"{base}/metrics"
 
-    # Start metrics watcher
     start_metrics_watcher(model_url_map, interval=interval)
 
-    # -------------------------
     # Router
-    # -------------------------
     carrot_router = CarrotRouter(load_carrot_router("checkpoints/carrot", model_type="linear"))
 
-    # -------------------------
-    # Prompts (shuffle + limit)
-    # -------------------------
+    # --------------------------------------------------------
+    # Load prompt dataset
+    # --------------------------------------------------------
     df = pd.read_parquet(prompt_path)
-
-    # MUST contain: prompt, carrot_emb (list or np array)
     if "carrot_emb" not in df.columns:
-        raise ValueError("Your parquet file must contain `carrot_emb` column.")
+        raise ValueError("Your parquet must contain `carrot_emb` column.")
 
-    # Shuffle & limit
     df = df.sample(frac=1.0, random_state=42).head(num_prompts)
 
     prompts = df["prompt"].tolist()
-    embeddings = df["carrot_emb"].tolist()   # list of lists
+    embeddings = df["carrot_emb"].tolist()
     N = len(prompts)
 
-    # For scaling concurrency with load
-    min_rate = min(arrival_rates)
-    MAX_THREADS = 256  # hard cap for safety
+    # --------------------------------------------------------
+    # Use FIXED concurrency
+    # --------------------------------------------------------
+    effective_concurrency = concurrency
+    print(f"[INFO] Using FIXED concurrency = {effective_concurrency}")
 
     final_results = []
 
     # ============================================================
-    # Sweep through arrival rates
+    # Sweep λ
     # ============================================================
     for rate in arrival_rates:
         print(f"\n========== Running λ = {rate} (pattern={pattern_name}) ==========")
 
-        # Poisson / sustained / microburst pattern
         pattern = RequestPattern(pattern_name, rate)
 
-        # Scale concurrency with λ
-        # base_concurrency is for min_rate; larger λ => more threads
-        effective_concurrency = int(concurrency * (rate / min_rate))
-        effective_concurrency = max(4, min(effective_concurrency, MAX_THREADS))
-
-        print(f"[INFO] Using effective_concurrency = {effective_concurrency}")
-
-        # Stats
+        # Per-model stats
         model_dist = Counter()
         gpu_dist = Counter()
 
         model_wait_lists = defaultdict(list)
         kv_obs = defaultdict(list)
-        latencies = []
+
+        ttft_rec = defaultdict(list)
+        tpot_rec = defaultdict(list)
+        lat_rec  = defaultdict(list)
+        ntok_rec = defaultdict(list)
 
         q = queue.Queue()
 
-        # -------------------------
-        # Worker
-        # -------------------------
+        # --------------------------------------------------------
+        # Worker thread
+        # --------------------------------------------------------
         def worker():
             while True:
                 item = q.get()
                 if item is None:
                     return
-
                 pid, prompt = item
-
-                # choose model via CARROT using precomputed emb
-                best_score = -1e9
-                chosen = None
 
                 emb = np.array(embeddings[pid])
 
+                # CARROT selection
+                best_score = -1e9
+                chosen = None
                 for m in model_names:
                     hf_name = get_model_hugging_face_name(m)
                     quality, cost = carrot_router.compute_from_embedding(hf_name, emb)
@@ -167,7 +155,7 @@ def run_motivation_sweep(
                 model_name = chosen
                 gpu_id = model_to_gpu[model_name]
 
-                # metrics BEFORE dispatch
+                # metadata before dispatch
                 snap = model_metrics.get(model_name, {})
                 waiting = snap.get("num_requests_waiting", 0)
                 kv = snap.get("kv_cache_usage_perc", 0.0)
@@ -175,54 +163,80 @@ def run_motivation_sweep(
                 model_wait_lists[model_name].append(waiting)
                 kv_obs[model_name].append(kv)
 
-                # issue request
+                # actual request
                 ttft, tpot, lat, d = send_request(clients[model_name], model_name, prompt)
-                latencies.append(lat)
 
+                # update stats
                 model_dist[model_name] += 1
                 gpu_dist[gpu_id] += 1
 
+                ttft_rec[model_name].append(ttft)
+                tpot_rec[model_name].append(tpot)
+                lat_rec[model_name].append(lat)
+                ntok_rec[model_name].append(d)
+
                 q.task_done()
 
-        # -------------------------
-        # Thread pool
-        # -------------------------
+        # --------------------------------------------------------
+        # Start thread pool
+        # --------------------------------------------------------
         threads = []
         for _ in range(effective_concurrency):
             t = threading.Thread(target=worker, daemon=True)
             t.start()
             threads.append(t)
 
-        # feed requests with pattern-driven delay
+        # Feed requests with delay pattern
         for i, prompt in enumerate(prompts):
             q.put((i, prompt))
             time.sleep(pattern.next_delay())
 
-        # stop workers
+        # Shutdown workers
         for _ in threads:
             q.put(None)
         for t in threads:
             t.join()
 
-        # aggregate stats
-        hf_model_dist = {}
+        # --------------------------------------------------------
+        # Aggregate per-model latency metrics
+        # --------------------------------------------------------
         hf_avg_wait = {}
         hf_avg_kv = {}
+        hf_avg_ttft = {}
+        hf_avg_tpot = {}
+        hf_avg_lat  = {}
+        hf_p95_lat  = {}
+        hf_avg_ntoks = {}
+
+        hf_model_dist = {}
 
         for m in model_names:
             hf = get_model_hugging_face_name(m)
 
-            # model_distribution: fill missing with 0
             hf_model_dist[hf] = model_dist.get(m, 0)
 
-            # waiting: fill missing with 0
             waits = model_wait_lists.get(m, [])
             hf_avg_wait[hf] = float(np.mean(waits)) if waits else 0.0
 
-            # kv-cache: fill missing with 0
             kvs = kv_obs.get(m, [])
             hf_avg_kv[hf] = float(np.mean(kvs)) if kvs else 0.0
 
+            vals = ttft_rec.get(m, [])
+            hf_avg_ttft[hf] = float(np.mean(vals)) if vals else 0.0
+
+            vals = tpot_rec.get(m, [])
+            hf_avg_tpot[hf] = float(np.mean(vals)) if vals else 0.0
+
+            vals = lat_rec.get(m, [])
+            hf_avg_lat[hf] = float(np.mean(vals)) if vals else 0.0
+            hf_p95_lat[hf] = float(np.percentile(vals, 95)) if vals else 0.0
+
+            vals = ntok_rec.get(m, [])
+            hf_avg_ntoks[hf] = float(np.mean(vals)) if vals else 0.0
+
+        # --------------------------------------------------------
+        # Final result for this λ
+        # --------------------------------------------------------
         result = {
             "arrival_rate": rate,
             "num_requests": N,
@@ -230,15 +244,14 @@ def run_motivation_sweep(
             "model_distribution": hf_model_dist,
             "gpu_distribution": dict(gpu_dist),
 
-            # Per-model queue imbalance (motivation)
             "avg_waiting_per_model": hf_avg_wait,
-
-            # Per-model KV cache pressure
             "avg_kv_cache": hf_avg_kv,
 
-            # Latency
-            "avg_latency": float(np.mean(latencies)) if latencies else 0.0,
-            "p95_latency": float(np.percentile(latencies, 95)) if latencies else 0.0,
+            "avg_ttft": hf_avg_ttft,
+            "avg_tpot": hf_avg_tpot,
+            "avg_latency_per_model": hf_avg_lat,
+            "p95_latency_per_model": hf_p95_lat,
+            "avg_output_tokens": hf_avg_ntoks,
 
             "arrival_pattern": pattern_name,
             "effective_concurrency": effective_concurrency,
@@ -247,16 +260,15 @@ def run_motivation_sweep(
         print(json.dumps(result, indent=2))
         final_results.append(result)
 
-        # -----------------------------------------
-        # Save after every arrival_rate (append)
-        # -----------------------------------------
+        # --------------------------------------------------------
+        # Save to CSV
+        # --------------------------------------------------------
         output_dir = os.path.dirname(output_csv)
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
 
         df_tmp = pd.DataFrame([result])
 
-        # If file does not exist → write header
         if not os.path.isfile(output_csv):
             df_tmp.to_csv(output_csv, index=False)
         else:
@@ -267,21 +279,18 @@ def run_motivation_sweep(
     print(f"\nSaved motivation sweep → {output_csv}")
 
 
-# -------------------------
-# Main Entry
-# -------------------------
+# ============================================================
+# Main
+# ============================================================
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/gpu_model_map_h100.yaml")
     parser.add_argument("--prompt_path", default="data/prompts/mixed_prompts_eval_with_prompt_embeddings.parquet")
-    parser.add_argument("--output", default="data/motivation_sweep_final_3.csv")
-
-    # This is *base* concurrency at the smallest λ
-    parser.add_argument("--concurrency", type=int, default=20)
-
+    parser.add_argument("--output", default="data/motivation_sweep_final_4_with_latency.csv")
+    parser.add_argument("--concurrency", type=int, default=20)     # FIXED concurrency
     parser.add_argument("--interval", type=float, default=0.2)
-    parser.add_argument("--arrival_rates", nargs="+", type=float, default=[3,6,9,12,15,18,21])
+    parser.add_argument("--arrival_rates", nargs="+", type=float, default=[3, 6, 9, 12, 15, 18, 21])
     parser.add_argument("--num_prompts", type=int, default=300)
     parser.add_argument(
         "--pattern",
