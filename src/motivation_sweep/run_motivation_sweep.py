@@ -275,13 +275,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/gpu_model_map_h100.yaml")
     parser.add_argument("--prompt_path", default="data/prompts/mixed_prompts_eval_with_prompt_embeddings.parquet")
-    parser.add_argument("--output", default="data/motivation_sweep_final_2.csv")
+    parser.add_argument("--output", default="data/motivation_sweep_final_3.csv")
 
     # This is *base* concurrency at the smallest λ
-    parser.add_argument("--concurrency", type=int, default=80)
+    parser.add_argument("--concurrency", type=int, default=20)
 
     parser.add_argument("--interval", type=float, default=0.2)
-    parser.add_argument("--arrival_rates", nargs="+", type=float, default=[2, 5, 10, 20, 40, 60, 80])
+    parser.add_argument("--arrival_rates", nargs="+", type=float, default=[3,6,9,12,15,18,21])
     parser.add_argument("--num_prompts", type=int, default=300)
     parser.add_argument(
         "--pattern",
