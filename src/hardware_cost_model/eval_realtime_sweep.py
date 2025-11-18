@@ -19,13 +19,11 @@ from .model_maps import get_model_id, get_model_hugging_face_name
 LAT_P95_LOG = 4.556350
 STATIC_P95 = 0.00010604
 
-# =========================================================
-# Global score lambda (will be set from sweep loop)
-# =========================================================
-CURRENT_LAMBDA = 0.5
+# Fixed score lambda
+SCORE_LAMBDA = 0.2
 
 
-def parse_float_list(s):
+def parse_float_list(s: str):
     """Parse comma-separated float list."""
     return [float(x.strip()) for x in s.split(",") if x.strip()]
 
@@ -142,7 +140,7 @@ def build_eval_lookup(eval_csv_path):
 
 
 # =========================================================
-# Main evaluation logic for a single (arrival_rate, lambda)
+# Main evaluation logic for a single (router, arrival_rate)
 # =========================================================
 def run_eval(
     config,
@@ -161,7 +159,7 @@ def run_eval(
     run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     print(
         f"[Eval] run_id={run_id}, router={router_type}, "
-        f"score_lambda={CURRENT_LAMBDA}, arrival_rate={arrival_rate}, pattern={pattern_type}"
+        f"score_lambda={SCORE_LAMBDA}, arrival_rate={arrival_rate}, pattern={pattern_type}"
     )
 
     # ----------------------------
@@ -240,8 +238,8 @@ def run_eval(
     # ----------------------------
     # Aggregation structures (thread-safe)
     # ----------------------------
-    dispatch_model_counter = Counter()  # counts per model_hf
-    dispatch_gpu_counter = Counter()  # counts per gpu_id
+    dispatch_model_counter = Counter()  # counts per HF model
+    dispatch_gpu_counter = Counter()    # counts per gpu_id
 
     agg_stats = {
         "ttft_sum": 0.0,
@@ -298,9 +296,6 @@ def run_eval(
             # cost term: CARROT vs HW
             if router_type == "carrot":
                 cost_term = static_cost_norm
-                ttft_hat = 0.0
-                tpot_hat = 0.0
-                pred_total = 0.0
             else:
                 model_id_int = get_model_id(local_model_name)
                 feat = {
@@ -319,11 +314,12 @@ def run_eval(
                 raw_lat = ttft_hat + pred_len * tpot_hat
                 raw_lat = max(raw_lat, 1e-6)
 
-                pred_total = raw_lat
+                # log-normalized latency cost
                 lat_norm = np.log1p(raw_lat) / LAT_P95_LOG
                 cost_term = min(lat_norm, 1.0)
 
-            score = CURRENT_LAMBDA * quality - (1.0 - CURRENT_LAMBDA) * cost_term
+            # Score with fixed lambda = 0.5
+            score = SCORE_LAMBDA * quality - (1.0 - SCORE_LAMBDA) * cost_term
 
             if best_score is None or score > best_score:
                 best_score = score
@@ -386,7 +382,7 @@ def run_eval(
     summary = {
         "run_id": run_id,
         "router": router_type,
-        "lambda_score": CURRENT_LAMBDA,
+        "lambda_score": SCORE_LAMBDA,
         "arrival_rate": arrival_rate,
         "pattern_type": pattern_type,
         "num_prompts": len(prompts),
@@ -419,10 +415,11 @@ def run_eval(
     if len(model_stats) > 0:
         ms_df = pd.DataFrame(model_stats)
 
-        # Per-model averages
+        # Per-model averages (use HF names)
         for model_name in ms_df["model"].unique():
             sub = ms_df[ms_df["model"] == model_name]
-            key_prefix = f"model_{model_name}"
+            hf_name = get_model_hugging_face_name(model_name)
+            key_prefix = f"model_{hf_name}"
             summary[f"{key_prefix}_avg_running"] = float(sub["running"].mean())
             summary[f"{key_prefix}_avg_waiting"] = float(sub["waiting"].mean())
             summary[f"{key_prefix}_avg_kv_cache"] = float(
@@ -450,7 +447,7 @@ def run_eval(
         summary["overall_avg_waiting"] = 0.0
         summary["overall_avg_kv_cache"] = 0.0
 
-    # Prompt distribution among models
+    # Prompt distribution among models (HF names)
     for m_name, c in dispatch_model_counter.items():
         summary[f"dispatch_count_model_{m_name}"] = int(c)
 
@@ -468,7 +465,8 @@ def run_eval(
 
 
 # =========================================================
-# CLI with sweep over arrival_rates and lambdas
+# CLI: sweep over routers (outer) and arrival_rates (inner)
+# Append to CSV after each run
 # =========================================================
 if __name__ == "__main__":
     import argparse
@@ -491,72 +489,93 @@ if __name__ == "__main__":
         help="evaluation_dataset_processed_full.csv",
     )
     parser.add_argument(
-        "--router",
-        choices=["carrot", "hw"],
-        default="hw",
-        help="Router type: 'carrot' (static cost) or 'hw' (hardware-aware).",
-    )
-    parser.add_argument(
         "--output_dir",
         default="data/router_eval_runs",
         help="Directory to write summary CSV.",
     )
-
     parser.add_argument(
         "--arrival_rates",
-        default="5,10,15,20",
+        default="15,18,21",
         help="Comma-separated arrival rates (e.g., '5,10,15,20').",
     )
-    parser.add_argument(
-        "--lambdas",
-        default="0.3,0.5,0.7",
-        help="Comma-separated score lambdas (e.g., '0.3,0.5,0.7').",
-    )
-
     parser.add_argument(
         "--pattern_type",
         default="sustained",
         help="Request pattern type: e.g., 'poisson', 'sustained', 'microburst'.",
     )
-
     parser.add_argument(
         "--concurrency",
         type=int,
-        default=20,
+        default=40,
         help="Max concurrent threads (requests).",
     )
     parser.add_argument(
         "--interval",
         type=float,
-        default=0.3,
+        default=0.2,
         help="Metrics watcher poll interval (seconds).",
     )
     parser.add_argument(
         "--num_prompts",
         type=int,
-        default=None,
+        default=300,
         help="Optional: cap number of prompts (for testing).",
     )
 
     args = parser.parse_args()
 
     arrival_values = parse_float_list(args.arrival_rates)
-    lambda_values = parse_float_list(args.lambdas)
 
     os.makedirs(args.output_dir, exist_ok=True)
-    summary_rows = []
+    summary_path = os.path.join(args.output_dir, "eval_summary_both_routers_200_0.2.csv")
 
-    for lam in lambda_values:
-        CURRENT_LAMBDA = lam
+    # Define full schema once
+    template_cols = [
+        "run_id","router","lambda_score","arrival_rate","pattern_type",
+        "num_prompts","num_completed",
+        "avg_ttft_real","avg_tpot_real","avg_latency_real",
+        "avg_p_tokens","avg_d_tokens",
+        "overall_avg_running","overall_avg_waiting","overall_avg_kv_cache",
+        "model_Qwen2.5-14B-Instruct_avg_running",
+        "model_Qwen2.5-14B-Instruct_avg_waiting",
+        "model_Qwen2.5-14B-Instruct_avg_kv_cache",
+        "model_Phi-3-mini-128k-instruct_avg_running",
+        "model_Phi-3-mini-128k-instruct_avg_waiting",
+        "model_Phi-3-mini-128k-instruct_avg_kv_cache",
+        "model_Llama-3.1-8B-Instruct_avg_running",
+        "model_Llama-3.1-8B-Instruct_avg_waiting",
+        "model_Llama-3.1-8B-Instruct_avg_kv_cache",
+        "model_Qwen2.5-3B-Instruct_avg_running",
+        "model_Qwen2.5-3B-Instruct_avg_waiting",
+        "model_Qwen2.5-3B-Instruct_avg_kv_cache",
+        "model_Mistral-7B-Instruct-v0.3_avg_running",
+        "model_Mistral-7B-Instruct-v0.3_avg_waiting",
+        "model_Mistral-7B-Instruct-v0.3_avg_kv_cache",
+        "gpu_0_avg_running","gpu_0_avg_waiting","gpu_0_avg_kv_cache",
+        "gpu_1_avg_running","gpu_1_avg_waiting","gpu_1_avg_kv_cache",
+        "dispatch_count_model_Qwen2.5-3B-Instruct",
+        "dispatch_count_model_Llama-3.1-8B-Instruct",
+        "dispatch_count_model_Mistral-7B-Instruct-v0.3",
+        "dispatch_count_gpu_1",
+        "dispatch_count_gpu_0"
+    ]
 
-        print(f"\n===== Running sweep for score_lambda={lam} =====")
+    df_template = pd.DataFrame(columns=template_cols)
+
+    # Create CSV with header once
+    if not os.path.exists(summary_path):
+        df_template.to_csv(summary_path, index=False)
+
+    # Main loop
+    for router in ["carrot", "hw"]:
+        print(f"\n===== ROUTER: {router} =====")
         for arr in arrival_values:
             print(f"\n--- arrival_rate={arr} ---")
             summary = run_eval(
                 config=args.config,
                 prompt_path=args.prompt_path,
                 eval_csv_path=args.eval_csv,
-                router_type=args.router,
+                router_type=router,
                 output_dir=args.output_dir,
                 arrival_rate=arr,
                 concurrency=args.concurrency,
@@ -564,10 +583,17 @@ if __name__ == "__main__":
                 pattern_type=args.pattern_type,
                 num_prompts=args.num_prompts,
             )
-            summary_rows.append(summary)
 
-    # Write all summaries to a single CSV
-    summary_df = pd.DataFrame(summary_rows)
-    summary_path = os.path.join(args.output_dir, "eval_summary.csv")
-    summary_df.to_csv(summary_path, index=False)
-    print(f"\n[Eval] All summaries written to {summary_path}")
+            df_row = pd.DataFrame([summary])
+
+            # Fill missing fields with 0
+            for col in template_cols:
+                if col not in df_row.columns:
+                    df_row[col] = 0
+
+            df_row = df_row[template_cols]
+
+            # Append row
+            df_row.to_csv(summary_path, mode="a", header=False, index=False)
+
+    print(f"\n[Eval] All summaries appended to {summary_path}")
