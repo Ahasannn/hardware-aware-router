@@ -495,7 +495,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--arrival_rates",
-        default="15,18,21",
+        default="3,6,9,12,15,18,21",
         help="Comma-separated arrival rates (e.g., '5,10,15,20').",
     )
     parser.add_argument(
@@ -518,7 +518,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_prompts",
         type=int,
-        default=300,
+        default=1685,
         help="Optional: cap number of prompts (for testing).",
     )
 
@@ -527,7 +527,7 @@ if __name__ == "__main__":
     arrival_values = parse_float_list(args.arrival_rates)
 
     os.makedirs(args.output_dir, exist_ok=True)
-    summary_path = os.path.join(args.output_dir, "eval_summary_both_routers_200_0.2.csv")
+    summary_path = os.path.join(args.output_dir, "eval_summary_both_routers_0.2_full_sweep_sbatch.csv")
 
     # Define full schema once
     template_cols = [
