@@ -21,7 +21,7 @@ from sklearn.linear_model import LinearRegression
 latency_p95_log = 4.556350
 static_cost_p95 = 0.00010604
 static_cost_p95_irt = 0.000000220000
-
+static_cost_p95_umr = 0.000000220000
 
 # ---------------------------------------------------------
 #  SLO Calibration
@@ -80,6 +80,11 @@ def run_lambda_sweep(csv_path, lambdas=None):
         df["static_cost_irt"] / static_cost_p95_irt
     ).clip(upper=1.0)
 
+    #UMR Cost 
+    df["static_cost_norm_umr"] = (
+        df["umr_cost_score"] / static_cost_p95_umr
+    ).clip(upper=1.0)
+
     # ---------------------------------------------------------
     # SLO calibration
     # ---------------------------------------------------------
@@ -116,14 +121,23 @@ def run_lambda_sweep(csv_path, lambdas=None):
             - (1 - lam) * df["static_cost_norm_irt"]
         )
 
+        #UMR score
+        df["umr_score"] = (
+            lam * df["umr_quality_score"]
+            - (1 - lam) * df["static_cost_norm_umr"]
+        )
+
+
         # select top model per prompt
         idx_c = groups["carrot_score"].idxmax()
         idx_o = groups["ours_score"].idxmax()
         idx_i = groups["irt_score"].idxmax()
+        idx_u = groups["umr_score"].idxmax()
 
         sel_c = df.loc[idx_c]
         sel_o = df.loc[idx_o]
         sel_i = df.loc[idx_i]
+        sel_u = df.loc[idx_u]
 
         # Quality / Latency metrics
         carrot_q = sel_c["actual_quality_score"].mean()
@@ -135,28 +149,36 @@ def run_lambda_sweep(csv_path, lambdas=None):
         irt_q = sel_i["actual_quality_score"].mean()
         irt_lat = sel_i["latency_s"].mean()
 
+        umr_q = sel_u["actual_quality_score"].mean()
+        umr_lat = sel_u["latency_s"].mean()
+
         # -------------------------
         # SLO metrics
         # -------------------------
         c_ttft_slo = slo_a + slo_b * sel_c["p_tokens"]
         o_ttft_slo = slo_a + slo_b * sel_o["p_tokens"]
         i_ttft_slo = slo_a + slo_b * sel_i["p_tokens"]
+        u_ttft_slo = slo_a + slo_b * sel_u["p_tokens"]
 
         carrot_slo_ttft = (sel_c["ttft_s"] <= c_ttft_slo).mean()
         ours_slo_ttft   = (sel_o["ttft_s"] <= o_ttft_slo).mean()
         irt_slo_ttft   = (sel_i["ttft_s"] <= i_ttft_slo).mean()
+        umr_slo_ttft   = (sel_u["ttft_s"] <= u_ttft_slo).mean()
 
         carrot_slo_tpot = (sel_c["tpot_s_per_token"] <= slo_tpot).mean()
         ours_slo_tpot   = (sel_o["tpot_s_per_token"] <= slo_tpot).mean()
         irt_slo_tpot   = (sel_i["tpot_s_per_token"] <= slo_tpot).mean()
+        umr_slo_tpot   = (sel_u["tpot_s_per_token"] <= slo_tpot).mean()
 
         c_e2e_slo = c_ttft_slo + slo_tpot * sel_c["d_tokens"]
         o_e2e_slo = o_ttft_slo + slo_tpot * sel_o["d_tokens"]
         i_e2e_slo = i_ttft_slo + slo_tpot * sel_i["d_tokens"]
+        u_e2e_slo = u_ttft_slo + slo_tpot * sel_u["d_tokens"]
 
         carrot_slo_e2e = (sel_c["latency_s"] <= c_e2e_slo).mean()
         ours_slo_e2e   = (sel_o["latency_s"] <= o_e2e_slo).mean()
         irt_slo_e2e   = (sel_i["latency_s"] <= i_e2e_slo).mean()
+        umr_slo_e2e   = (sel_u["latency_s"] <= u_e2e_slo).mean()
 
         # final record
         results.append({
@@ -176,6 +198,11 @@ def run_lambda_sweep(csv_path, lambdas=None):
             "irt_slo_ttft": irt_slo_ttft,
             "irt_slo_tpot": irt_slo_tpot,
             "irt_slo_e2e": irt_slo_e2e,
+            "umr_quality": umr_q,
+            "umr_latency": umr_lat,
+            "umr_slo_ttft": umr_slo_ttft,
+            "umr_slo_tpot": umr_slo_tpot,
+            "umr_slo_e2e": umr_slo_e2e,
             "num_prompts": len(sel_c)
         })
 
@@ -186,9 +213,11 @@ def run_lambda_sweep(csv_path, lambdas=None):
               f"SLO(TTFT)={ours_slo_ttft:.3f}  SLO(TPOT)={ours_slo_tpot:.3f}  SLO(E2E)={ours_slo_e2e:.3f}")
         print(f"  IRT  : Q={irt_q:.4f}  LAT={irt_lat:.2f}s  | "
               f"SLO(TTFT)={irt_slo_ttft:.3f}  SLO(TPOT)={irt_slo_tpot:.3f}  SLO(E2E)={irt_slo_e2e:.3f}")
+        print(f"  UMR  : Q={umr_q:.4f}  LAT={umr_lat:.2f}s  | "
+              f"SLO(TTFT)={umr_slo_ttft:.3f}  SLO(TPOT)={umr_slo_tpot:.3f}  SLO(E2E)={umr_slo_e2e:.3f}")      
 
     # save results
-    out_path = "data/lambda_sweep_results_with_irt.csv"
+    out_path = "data/lambda_sweep_results_with_irt_umr.csv"
     pd.DataFrame(results).to_csv(out_path, index=False)
     print(f"\n[Sweep] Saved λ-sweep results → {out_path}")
 
@@ -199,7 +228,7 @@ def run_lambda_sweep(csv_path, lambdas=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="data/evaluation_dataset_processed_full.csv")
+    parser.add_argument("--input", default="data/evaluation_dataset_processed_full_with_umr.csv")
     parser.add_argument("--lambda_start", type=float, default=0.0)
     parser.add_argument("--lambda_end",   type=float, default=1.0)
     parser.add_argument("--lambda_step",  type=float, default=0.1)
