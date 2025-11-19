@@ -74,6 +74,31 @@ static_cost_p95 = float(np.percentile(df["static_cost"], 95))
 
 print(f"static_cost_p95 = {static_cost_p95:.12f}")
 
+
+
+# =========================================================
+#   Compute static IRT cost percentile constant
+# =========================================================
+
+def compute_static_cost_irt(row):
+    model_local = row["model_id"]
+
+    if model_local not in LOCAL_MODEL_TO_HUGGINGFACE_NAME:
+        raise ValueError(f"Unknown model path: {model_local}")
+
+    hf = LOCAL_MODEL_TO_HUGGINGFACE_NAME[model_local]
+
+    if hf not in MODEL_PRICES:
+        raise ValueError(f"Missing price for model: {hf}")
+
+    return MODEL_PRICES[hf]
+
+df["static_cost_irt"] = df.apply(compute_static_cost_irt, axis=1)
+
+static_cost_p95_irt = float(np.percentile(df["static_cost_irt"], 95))
+
+print(f"static_cost_p95_irt = {static_cost_p95_irt:.12f}")
+
 # =========================================================
 #   Summary
 # =========================================================
@@ -81,4 +106,5 @@ print(f"static_cost_p95 = {static_cost_p95:.12f}")
 print("\n=== FINAL NORMALIZATION CONSTANTS ===")
 print(f"latency_p95_log = {latency_p95_log:.6f}")
 print(f"static_cost_p95 = {static_cost_p95:.12f}")
+print(f"static_cost_p95_irt = {static_cost_p95_irt:.12f}")
 print("=====================================\n")

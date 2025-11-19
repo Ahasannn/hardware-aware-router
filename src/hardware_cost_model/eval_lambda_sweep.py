@@ -20,6 +20,7 @@ from sklearn.linear_model import LinearRegression
 # ---------------------------------------------------------
 latency_p95_log = 4.556350
 static_cost_p95 = 0.00010604
+static_cost_p95_irt = 0.000000220000
 
 
 # ---------------------------------------------------------
@@ -73,6 +74,12 @@ def run_lambda_sweep(csv_path, lambdas=None):
     log_lat = np.log1p(df["pred_total_latency"])
     df["latency_cost_norm"] = (log_lat / latency_p95_log).clip(upper=1.0)
 
+    #IRT Cost (static cost)
+    df["static_cost_irt"] = df["carrot_predicted_cost"] / df["d_tokens"]
+    df["static_cost_norm_irt"] = (
+        df["static_cost_irt"] / static_cost_p95_irt
+    ).clip(upper=1.0)
+
     # ---------------------------------------------------------
     # SLO calibration
     # ---------------------------------------------------------
@@ -103,12 +110,20 @@ def run_lambda_sweep(csv_path, lambdas=None):
             - (1 - lam) * df["latency_cost_norm"]
         )
 
+        #IRT score
+        df["irt_score"] = (
+            lam * df["carrot_predicted_quality"]
+            - (1 - lam) * df["static_cost_norm_irt"]
+        )
+
         # select top model per prompt
         idx_c = groups["carrot_score"].idxmax()
         idx_o = groups["ours_score"].idxmax()
+        idx_i = groups["irt_score"].idxmax()
 
         sel_c = df.loc[idx_c]
         sel_o = df.loc[idx_o]
+        sel_i = df.loc[idx_i]
 
         # Quality / Latency metrics
         carrot_q = sel_c["actual_quality_score"].mean()
@@ -117,23 +132,31 @@ def run_lambda_sweep(csv_path, lambdas=None):
         ours_q = sel_o["actual_quality_score"].mean()
         ours_lat = sel_o["latency_s"].mean()
 
+        irt_q = sel_i["actual_quality_score"].mean()
+        irt_lat = sel_i["latency_s"].mean()
+
         # -------------------------
         # SLO metrics
         # -------------------------
         c_ttft_slo = slo_a + slo_b * sel_c["p_tokens"]
         o_ttft_slo = slo_a + slo_b * sel_o["p_tokens"]
+        i_ttft_slo = slo_a + slo_b * sel_i["p_tokens"]
 
         carrot_slo_ttft = (sel_c["ttft_s"] <= c_ttft_slo).mean()
         ours_slo_ttft   = (sel_o["ttft_s"] <= o_ttft_slo).mean()
+        irt_slo_ttft   = (sel_i["ttft_s"] <= i_ttft_slo).mean()
 
         carrot_slo_tpot = (sel_c["tpot_s_per_token"] <= slo_tpot).mean()
         ours_slo_tpot   = (sel_o["tpot_s_per_token"] <= slo_tpot).mean()
+        irt_slo_tpot   = (sel_i["tpot_s_per_token"] <= slo_tpot).mean()
 
         c_e2e_slo = c_ttft_slo + slo_tpot * sel_c["d_tokens"]
         o_e2e_slo = o_ttft_slo + slo_tpot * sel_o["d_tokens"]
+        i_e2e_slo = i_ttft_slo + slo_tpot * sel_i["d_tokens"]
 
         carrot_slo_e2e = (sel_c["latency_s"] <= c_e2e_slo).mean()
         ours_slo_e2e   = (sel_o["latency_s"] <= o_e2e_slo).mean()
+        irt_slo_e2e   = (sel_i["latency_s"] <= i_e2e_slo).mean()
 
         # final record
         results.append({
@@ -148,6 +171,11 @@ def run_lambda_sweep(csv_path, lambdas=None):
             "ours_slo_ttft": ours_slo_ttft,
             "ours_slo_tpot": ours_slo_tpot,
             "ours_slo_e2e": ours_slo_e2e,
+            "irt_quality": irt_q,
+            "irt_latency": irt_lat,
+            "irt_slo_ttft": irt_slo_ttft,
+            "irt_slo_tpot": irt_slo_tpot,
+            "irt_slo_e2e": irt_slo_e2e,
             "num_prompts": len(sel_c)
         })
 
@@ -156,9 +184,11 @@ def run_lambda_sweep(csv_path, lambdas=None):
               f"SLO(TTFT)={carrot_slo_ttft:.3f}  SLO(TPOT)={carrot_slo_tpot:.3f}  SLO(E2E)={carrot_slo_e2e:.3f}")
         print(f"  OURS  : Q={ours_q:.4f}  LAT={ours_lat:.2f}s  | "
               f"SLO(TTFT)={ours_slo_ttft:.3f}  SLO(TPOT)={ours_slo_tpot:.3f}  SLO(E2E)={ours_slo_e2e:.3f}")
+        print(f"  IRT  : Q={irt_q:.4f}  LAT={irt_lat:.2f}s  | "
+              f"SLO(TTFT)={irt_slo_ttft:.3f}  SLO(TPOT)={irt_slo_tpot:.3f}  SLO(E2E)={irt_slo_e2e:.3f}")
 
     # save results
-    out_path = "data/lambda_sweep_results.csv"
+    out_path = "data/lambda_sweep_results_with_irt.csv"
     pd.DataFrame(results).to_csv(out_path, index=False)
     print(f"\n[Sweep] Saved λ-sweep results → {out_path}")
 
