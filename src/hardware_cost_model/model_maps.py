@@ -17,7 +17,6 @@ LOCAL_MODEL_TO_HUGGINGFACE_NAME = {
     "/home/ah872032/models/mistral7b" : "Mistral-7B-Instruct-v0.3",
 }
 
-
 def get_model_id(name: str) -> int:
     if name in LOCAL_MODEL_TO_ID:
         return LOCAL_MODEL_TO_ID[name]
