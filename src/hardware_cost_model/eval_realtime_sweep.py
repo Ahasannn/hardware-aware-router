@@ -18,9 +18,10 @@ from .model_maps import get_model_id, get_model_hugging_face_name
 # =========================================================
 LAT_P95_LOG = 4.556350
 STATIC_P95 = 0.00010604
+STATIC_P95_IRT = 0.000000220000
 
 # Fixed score lambda
-SCORE_LAMBDA = 0.2
+SCORE_LAMBDA = 0.5
 
 
 def parse_float_list(s: str):
@@ -287,6 +288,10 @@ def run_eval(
             static_cost = pred_len * price
             static_cost_norm = min(static_cost / STATIC_P95, 1.0)
 
+            static_cost_irt = price
+            static_cost_norm_irt = min(static_cost_irt / STATIC_P95_IRT, 1.0)
+
+
             # HW snapshot
             snap = model_metrics.get(local_model_name, {})
             running = snap.get("num_requests_running", 0)
@@ -296,6 +301,8 @@ def run_eval(
             # cost term: CARROT vs HW
             if router_type == "carrot":
                 cost_term = static_cost_norm
+            elif router_type == "irt":
+                cost_term = static_cost_norm_irt
             else:
                 model_id_int = get_model_id(local_model_name)
                 feat = {
@@ -495,7 +502,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--arrival_rates",
-        default="3,6,9,12,15,18,21",
+        default="15,18,21",
         help="Comma-separated arrival rates (e.g., '5,10,15,20').",
     )
     parser.add_argument(
@@ -527,7 +534,7 @@ if __name__ == "__main__":
     arrival_values = parse_float_list(args.arrival_rates)
 
     os.makedirs(args.output_dir, exist_ok=True)
-    summary_path = os.path.join(args.output_dir, "eval_summary_both_routers_0.2_full_sweep_sbatch.csv")
+    summary_path = os.path.join(args.output_dir, "eval_summary_irt_only.csv")
 
     # Define full schema once
     template_cols = [
@@ -567,7 +574,7 @@ if __name__ == "__main__":
         df_template.to_csv(summary_path, index=False)
 
     # Main loop
-    for router in ["carrot", "hw"]:
+    for router in ["irt"]:
         print(f"\n===== ROUTER: {router} =====")
         for arr in arrival_values:
             print(f"\n--- arrival_rate={arr} ---")
