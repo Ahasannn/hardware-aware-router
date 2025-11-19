@@ -121,6 +121,7 @@ def build_eval_lookup(eval_csv_path):
         "model_hf",
         "carrot_predicted_quality",
         "carrot_predicted_length",
+        "umr_quality_score"
     ]
     for c in required:
         if c not in df.columns:
@@ -135,6 +136,7 @@ def build_eval_lookup(eval_csv_path):
         lookup[key] = (
             float(row["carrot_predicted_quality"]),
             float(row["carrot_predicted_length"]),
+            float(row["umr_quality_score"]),
         )
 
     return lookup
@@ -279,7 +281,7 @@ def run_eval(
                     f"Missing eval row for (prompt_source_id={prompt_source_id}, model={hf_name})"
                 )
 
-            quality, pred_len = eval_lookup[key]
+            quality, pred_len, quality_umr = eval_lookup[key]
 
             # static CARROT cost
             price = MODEL_PRICES.get(hf_name)
@@ -290,6 +292,7 @@ def run_eval(
 
             static_cost_irt = price
             static_cost_norm_irt = min(static_cost_irt / STATIC_P95_IRT, 1.0)
+            static_cost_norm_umr = min(static_cost_irt / STATIC_P95_IRT, 1.0)
 
 
             # HW snapshot
@@ -303,6 +306,9 @@ def run_eval(
                 cost_term = static_cost_norm
             elif router_type == "irt":
                 cost_term = static_cost_norm_irt
+            elif router_type == "umr":
+                cost_term = static_cost_norm_umr
+                quality = quality_umr 
             else:
                 model_id_int = get_model_id(local_model_name)
                 feat = {
@@ -574,7 +580,7 @@ if __name__ == "__main__":
         df_template.to_csv(summary_path, index=False)
 
     # Main loop
-    for router in ["irt"]:
+    for router in ["umr"]:
         print(f"\n===== ROUTER: {router} =====")
         for arr in arrival_values:
             print(f"\n--- arrival_rate={arr} ---")
