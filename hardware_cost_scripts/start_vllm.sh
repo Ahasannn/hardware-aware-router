@@ -150,3 +150,13 @@ CUDA_VISIBLE_DEVICES=0 nohup python -m vllm.entrypoints.openai.api_server \
   --port 8011 \
   --host 0.0.0.0 \
   > logs/gpu0_phi3_mini.log 2>&1 &
+
+
+
+  CUDA_VISIBLE_DEVICES=1 nohup python -m vllm.entrypoints.openai.api_server \
+  --model ~/models/llama3-8b \
+  --max-model-len 32768 \
+  --gpu-memory-utilization 0.4 \
+  --port 8012 \
+  --host 0.0.0.0 \
+  > logs/gpu1-llama3-8b.log 2>&1 &

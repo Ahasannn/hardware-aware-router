@@ -111,7 +111,7 @@ def run_lambda_sweep(csv_path, lambdas=None):
 
         # OUR score
         df["ours_score"] = (
-            lam * df["carrot_predicted_quality"]
+            lam * df["umr_quality_score"]
             - (1 - lam) * df["latency_cost_norm"]
         )
 
