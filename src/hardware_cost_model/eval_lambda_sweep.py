@@ -117,13 +117,13 @@ def run_lambda_sweep(csv_path, lambdas=None):
         #IRT score
         df["irt_score"] = (
             lam * df["irt_quality_score"]
-            - (1 - lam) * df["static_cost_norm_irt"]
+            - (1 - lam) * df["static_cost_norm"]
         )
 
         #UMR score
         df["umr_score"] = (
             lam * df["umr_quality_score"]
-            - (1 - lam) * df["static_cost_norm_umr"]
+            - (1 - lam) * df["static_cost_norm"]
         )
 
 
