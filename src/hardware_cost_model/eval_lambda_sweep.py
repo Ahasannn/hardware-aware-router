@@ -74,10 +74,9 @@ def run_lambda_sweep(csv_path, lambdas=None):
     log_lat = np.log1p(df["pred_total_latency"])
     df["latency_cost_norm"] = (log_lat / latency_p95_log).clip(upper=1.0)
 
-    #IRT Cost (static cost)
-    df["static_cost_irt"] = df["carrot_predicted_cost"] / df["d_tokens"]
+    #IRT Cost 
     df["static_cost_norm_irt"] = (
-        df["static_cost_irt"] / static_cost_p95_irt
+        df["irt_cost_score"] / static_cost_p95_irt
     ).clip(upper=1.0)
 
     #UMR Cost 
@@ -111,20 +110,20 @@ def run_lambda_sweep(csv_path, lambdas=None):
 
         # OUR score
         df["ours_score"] = (
-            lam * df["umr_quality_score"]
+            lam * df["irt_quality_score"]
             - (1 - lam) * df["latency_cost_norm"]
         )
 
         #IRT score
         df["irt_score"] = (
-            lam * df["carrot_predicted_quality"]
-            - (1 - lam) * df["static_cost_norm_irt"]
+            lam * df["irt_quality_score"]
+            - (1 - lam) * df["static_cost_norm"]
         )
 
         #UMR score
         df["umr_score"] = (
             lam * df["umr_quality_score"]
-            - (1 - lam) * df["static_cost_norm_umr"]
+            - (1 - lam) * df["static_cost_norm"]
         )
 
 
@@ -217,7 +216,7 @@ def run_lambda_sweep(csv_path, lambdas=None):
               f"SLO(TTFT)={umr_slo_ttft:.3f}  SLO(TPOT)={umr_slo_tpot:.3f}  SLO(E2E)={umr_slo_e2e:.3f}")      
 
     # save results
-    out_path = "data/lambda_sweep_results_with_irt_umr.csv"
+    out_path = "data/lambda_sweep_results_final_with_irt_umr.csv"
     pd.DataFrame(results).to_csv(out_path, index=False)
     print(f"\n[Sweep] Saved λ-sweep results → {out_path}")
 
@@ -228,7 +227,7 @@ def run_lambda_sweep(csv_path, lambdas=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="data/evaluation_dataset_processed_full_with_umr.csv")
+    parser.add_argument("--input", default="data/evaluation_dataset_processed_full_with_umr_irt.csv")
     parser.add_argument("--lambda_start", type=float, default=0.0)
     parser.add_argument("--lambda_end",   type=float, default=1.0)
     parser.add_argument("--lambda_step",  type=float, default=0.1)
