@@ -1,10 +1,43 @@
 import requests, threading, time
+from collections import deque
 
 # Stores latest metrics snapshot for each model
 model_metrics = {}
 
 # Stores last cumulative values (for delta computation)
 _prev_values = {}
+
+# Sliding window token tracking (for token-weighted waiting queue)
+model_last_sent_requests = {}  # model_name -> deque([p_tokens_1, p_tokens_2, ...])
+MAX_HISTORY = 1000  # Track last 1000 requests per model
+
+def track_sent_request(model_name, p_tokens):
+    """Track a sent request's token count for sliding window estimation"""
+    if model_name not in model_last_sent_requests:
+        model_last_sent_requests[model_name] = deque(maxlen=MAX_HISTORY)
+    model_last_sent_requests[model_name].append(p_tokens)
+
+
+def get_waiting_tokens_estimate(model_name, waiting_count):
+    """
+    Estimate tokens in waiting queue using sliding window.
+    If waiting queue has X requests, sum the last X requests sent.
+    """
+    if model_name not in model_last_sent_requests:
+        return 0.0
+
+    history = model_last_sent_requests[model_name]
+    if len(history) == 0:
+        return 0.0
+
+    # Take last 'waiting_count' items from history
+    window_size = min(int(waiting_count), len(history))
+    if window_size == 0:
+        return 0.0
+
+    # Sum the last window_size requests
+    return sum(list(history)[-window_size:])
+
 
 def fetch_vllm_metrics(model_name, url):
     """Fetch metrics from one vLLM endpoint and update global storage."""
@@ -59,10 +92,14 @@ def fetch_vllm_metrics(model_name, url):
         data[sum_key] = cur_sum
         data[cnt_key] = cur_cnt
 
-    
+
     data["num_requests_running"] = curr.get("num_requests_running", 0)
     data["num_requests_waiting"] = curr.get("num_requests_waiting", 0)
     data["kv_cache_usage_perc"] = curr.get("kv_cache_usage_perc", 0)
+
+    # Add token-weighted waiting queue estimate
+    waiting_count = data["num_requests_waiting"]
+    data["waiting_tokens_estimate"] = get_waiting_tokens_estimate(model_name, waiting_count)
 
     # Update global dicts
     _prev_values[model_name] = curr
