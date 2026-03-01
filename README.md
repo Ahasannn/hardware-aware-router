@@ -60,7 +60,7 @@ Unlike static routing approaches that ignore server load, HW-Router integrates a
 ### Installation
 
 ```bash
-git clone https://github.com/<your-org>/hw-router.git
+git clone https://github.com/Ahasannn/hw-router.git
 cd hw-router
 pip install -e .
 ```

@@ -1,9 +1,8 @@
 """
 model_registry.py — Config-driven model name/ID mappings.
 
-Replaces the old model_maps.py that had hardcoded absolute paths
-(/home/ah872032/models/...). Now uses basename matching so that
-any local model path resolves correctly regardless of the system.
+Uses basename matching so that any local model path resolves
+correctly regardless of the system.
 
 Usage:
     from hw_router.model_registry import get_model_id, get_model_hugging_face_name

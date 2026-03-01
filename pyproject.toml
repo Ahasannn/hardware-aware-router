@@ -56,8 +56,8 @@ all = [
 ]
 
 [project.urls]
-Paper = "https://github.com/<your-org>/hw-router/blob/main/paper/DAC_HWRouter.pdf"
-Repository = "https://github.com/<your-org>/hw-router"
+Paper = "https://github.com/Ahasannn/hw-router/blob/main/paper/DAC_HWRouter.pdf"
+Repository = "https://github.com/Ahasannn/hw-router"
 
 [tool.setuptools.packages.find]
 include = ["hw_router*", "baselines*"]
