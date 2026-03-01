@@ -1,17 +1,17 @@
 gpus:
   "0":
-    - name: /home/ah872032/models/qwen14b
+    - name: qwen14b
       base_url: http://localhost:8010
 
-    - name: /home/ah872032/models/phi3-mini
+    - name: phi3-mini
       base_url: http://localhost:8011
 
   "1":
-    - name: /home/ah872032/models/llama3-8b
+    - name: llama3-8b
       base_url: http://localhost:8012
 
-    - name: /home/ah872032/models/qwen3b
+    - name: qwen3b
       base_url: http://localhost:8013
 
-    - name: /home/ah872032/models/mistral7b
+    - name: mistral7b
       base_url: http://localhost:8014

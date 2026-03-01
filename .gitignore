@@ -211,7 +211,20 @@ CLAUDE.md
 
 # Large data files
 data_quality/
-checkpoints/
 results/
 *.csv
 *.parquet
+
+# Allow key data files for reproducibility (small enough for git)
+!data/h100_full_sweep.csv
+!data/evaluation_dataset_processed_full_with_umr_irt.csv
+!data/lambda_sweep_results_final_with_irt_umr.csv
+!analysis/plots/*.csv
+!baselines/irt/llm_profile.csv
+
+# Logs
+logs/
+
+# Root-level artifacts (generated)
+*.joblib
+sweep_master.log
