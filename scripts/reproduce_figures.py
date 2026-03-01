@@ -51,14 +51,16 @@ def generate_figures():
 
     print("\n--- Generating Figures ---")
 
+    plots_dir = os.path.join(REPO_ROOT, "analysis", "plots")
+
     # Try to generate comparison figure
-    comparison_script = os.path.join(REPO_ROOT, "analysis", "plots", "plot_comparison.py")
+    comparison_script = os.path.join(plots_dir, "plot_comparison.py")
     if os.path.exists(comparison_script):
         try:
             subprocess.run(
                 [sys.executable, comparison_script],
                 check=True,
-                cwd=REPO_ROOT,
+                cwd=plots_dir,
             )
             print("[OK] Comparison figure generated")
         except subprocess.CalledProcessError:
@@ -66,13 +68,13 @@ def generate_figures():
             print("       Install visualization deps: pip install -e '.[viz]'")
 
     # Try to generate motivation figure
-    motivation_script = os.path.join(REPO_ROOT, "analysis", "plots", "plot_combined_motivation.py")
+    motivation_script = os.path.join(plots_dir, "plot_combined_motivation.py")
     if os.path.exists(motivation_script):
         try:
             subprocess.run(
                 [sys.executable, motivation_script],
                 check=True,
-                cwd=REPO_ROOT,
+                cwd=plots_dir,
             )
             print("[OK] Motivation figure generated")
         except subprocess.CalledProcessError:
