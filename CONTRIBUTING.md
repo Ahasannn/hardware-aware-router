@@ -61,8 +61,8 @@ python pipeline/data_collection/build_hardware_cost_dataset.py \
 ## Development Setup
 
 ```bash
-git clone https://github.com/Ahasannn/hw-router.git
-cd hw-router
+git clone https://github.com/Ahasannn/hardware-aware-router.git
+cd hardware-aware-router
 pip install -e ".[dev]"
 ```
 
