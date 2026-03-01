@@ -223,7 +223,7 @@ python scripts/get_scores.py \
     --batch_size 32 \
     --temperature 0.0 \
     --max-tokens 512 \
-    --cache-dir /home/ah872032/.cache/vllm/
+    --cache-dir ~/.cache/vllm/
 ```
 
 ## Performance Expectations
