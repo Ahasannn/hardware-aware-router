@@ -210,7 +210,6 @@ CLAUDE.md
 .vscode/
 
 # Large data files
-data_quality/
 results/
 *.csv
 *.parquet
@@ -221,6 +220,7 @@ results/
 !data/lambda_sweep_results_final_with_irt_umr.csv
 !analysis/plots/*.csv
 !baselines/irt/llm_profile.csv
+!data/data_quality/*.csv
 
 # Logs
 logs/
