@@ -228,3 +228,19 @@ logs/
 # Root-level artifacts (generated)
 *.joblib
 sweep_master.log
+
+# Build artifacts
+*.egg-info/
+.pytest_cache/
+__pycache__/
+
+# Generated figures (produced by make reproduce)
+analysis/plots/*.pdf
+analysis/plots/*.png
+
+# Generated experiment outputs
+data/router_eval_runs/
+data/eval_results/
+data/cost_predictor_plots/
+data/figures/
+logs/
