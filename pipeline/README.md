@@ -114,6 +114,25 @@ python pipeline/evaluation/eval_pipeline.py \
     --prompt_path data/prompts/mixed_prompts_eval.parquet
 ```
 
+## Retraining Baselines (Optional)
+
+Pre-trained artifacts for IRT and UMR are included in the repo. To retrain (e.g., after changing the model pool), quality scores are provided in `data/data_quality/`:
+
+```bash
+# Rebuild training CSV from judge scores + prompts
+python pipeline/data_preparation/build_umr_training_csv.py
+
+# Retrain IRT
+python baselines/irt/train_irt.py train \
+    --data-path data/UMR_router_training_data.csv \
+    --checkpoint baselines/irt/mirt_hw.snapshot
+
+# Retrain UMR
+python baselines/umr/umr_router.py train \
+    --train_csv data/UMR_router_training_data.csv \
+    --work_dir checkpoints/umr
+```
+
 ## Expected Results
 
 After running the full pipeline, you should observe:
