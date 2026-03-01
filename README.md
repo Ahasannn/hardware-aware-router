@@ -111,6 +111,10 @@ Or manually:
 python scripts/reproduce_figures.py
 ```
 
+### Running on Your Own Hardware
+
+Want to run HW-Router with your own GPUs and models? See **[docs/CUSTOM_HARDWARE_GUIDE.md](docs/CUSTOM_HARDWARE_GUIDE.md)** for a step-by-step walkthrough covering LLM pool config, vLLM setup, data collection, training, and evaluation.
+
 ### Running the Full Pipeline
 
 See [pipeline/README.md](pipeline/README.md) for the complete reproduction guide. The key steps are:
