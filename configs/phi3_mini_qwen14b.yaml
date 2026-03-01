@@ -1,7 +1,0 @@
-gpus:
-  "0":
-    - name: qwen14b
-      base_url: http://localhost:8010
-
-    - name: phi3-mini
-      base_url: http://localhost:8011

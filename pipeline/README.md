@@ -103,15 +103,11 @@ python pipeline/evaluation/eval_runtime_router.py \
     --eval_csv data/evaluation_dataset_processed_full.csv \
     --router hw
 
-# Online: Sweep over arrival rates
+# Online: Sweep over arrival rates for a specific router
 python pipeline/evaluation/eval_realtime_sweep.py \
+    --router hw \
     --arrival_rates "15,18,21" \
     --pattern_type sustained
-
-# Full pipeline evaluation (all routers)
-python pipeline/evaluation/eval_pipeline.py \
-    --config configs/gpu_model_map_h100.yaml \
-    --prompt_path data/prompts/mixed_prompts_eval.parquet
 ```
 
 ## Retraining Baselines (Optional)
