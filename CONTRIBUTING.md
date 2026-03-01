@@ -56,6 +56,8 @@ python pipeline/data_collection/build_hardware_cost_dataset.py \
     --config configs/my_gpu_setup.yaml
 ```
 
+`configs/test_small_models.yaml` is a minimal 2-model config useful for testing the pipeline without H100s (uses small public models).
+
 ## Development Setup
 
 ```bash

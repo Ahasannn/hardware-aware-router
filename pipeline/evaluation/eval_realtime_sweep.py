@@ -528,13 +528,19 @@ if __name__ == "__main__":
         default=1685,
         help="Optional: cap number of prompts (for testing).",
     )
+    parser.add_argument(
+        "--router",
+        choices=["carrot", "hw", "irt", "umr"],
+        default="hw",
+        help="Router type to evaluate.",
+    )
 
     args = parser.parse_args()
 
     arrival_values = parse_float_list(args.arrival_rates)
 
     os.makedirs(args.output_dir, exist_ok=True)
-    summary_path = os.path.join(args.output_dir, "eval_summary_irt_only.csv")
+    summary_path = os.path.join(args.output_dir, f"eval_summary_{args.router}.csv")
 
     # Define full schema once
     template_cols = [
@@ -574,7 +580,7 @@ if __name__ == "__main__":
         df_template.to_csv(summary_path, index=False)
 
     # Main loop
-    for router in ["umr"]:
+    for router in [args.router]:
         print(f"\n===== ROUTER: {router} =====")
         for arr in arrival_values:
             print(f"\n--- arrival_rate={arr} ---")
