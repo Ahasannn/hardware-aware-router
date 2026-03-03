@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 340" width="920" height="340">
+  <defs>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="indigoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="slateGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#10b981"/>
+    </marker>
+    <marker id="arrowMuted" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#475569"/>
+    </marker>
+    <marker id="arrowIndigo" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1"/>
+    </marker>
+  </defs>
+
+  <!-- ─── Input Box ─── -->
+  <rect x="10" y="105" width="120" height="70" rx="10" fill="url(#slateGrad)" stroke="#334155" stroke-width="1.5"/>
+  <text x="70" y="133" text-anchor="middle" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="10" letter-spacing="0.8">INCOMING</text>
+  <text x="70" y="153" text-anchor="middle" fill="#e2e8f0" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="14">Request</text>
+
+  <!-- Arrow: Input → Quality -->
+  <line x1="130" y1="140" x2="175" y2="140" stroke="#475569" stroke-width="2" marker-end="url(#arrowMuted)"/>
+
+  <!-- ─── Quality Predictor Box ─── -->
+  <rect x="185" y="90" width="170" height="100" rx="12" fill="url(#slateGrad)" stroke="#6366f1" stroke-width="2"/>
+  <rect x="185" y="90" width="170" height="28" rx="12" fill="#6366f1" opacity="0.15"/>
+  <rect x="185" y="106" width="170" height="1" fill="#6366f1" opacity="0.3"/>
+  <text x="270" y="110" text-anchor="middle" fill="#a78bfa" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="11" letter-spacing="0.5">QUALITY PREDICTOR</text>
+  <text x="270" y="147" text-anchor="middle" fill="#e2e8f0" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="13">Q</text>
+  <text x="280" y="150" text-anchor="middle" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="9" baseline-shift="-4">i</text>
+  <text x="290" y="147" text-anchor="middle" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="13">(x)</text>
+  <text x="270" y="172" text-anchor="middle" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="11">CARROT / IRT / UMR</text>
+
+  <!-- Arrow: Quality → Decision -->
+  <line x1="355" y1="130" x2="530" y2="130" stroke="#6366f1" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#arrowIndigo)"/>
+  <text x="443" y="122" text-anchor="middle" fill="#6366f1" font-family="JetBrains Mono, monospace" font-weight="500" font-size="11" opacity="0.8">quality</text>
+
+  <!-- ─── HW Cost Predictor Box ─── -->
+  <rect x="185" y="225" width="170" height="100" rx="12" fill="url(#slateGrad)" stroke="#10b981" stroke-width="2"/>
+  <rect x="185" y="225" width="170" height="28" rx="12" fill="#10b981" opacity="0.12"/>
+  <rect x="185" y="241" width="170" height="1" fill="#10b981" opacity="0.3"/>
+  <text x="270" y="245" text-anchor="middle" fill="#10b981" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="11" letter-spacing="0.5">HW COST MLP</text>
+  <text x="270" y="282" text-anchor="middle" fill="#e2e8f0" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="13">C</text>
+  <text x="280" y="285" text-anchor="middle" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="9" baseline-shift="-4">i</text>
+  <text x="290" y="282" text-anchor="middle" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="13">(x, h)</text>
+  <text x="270" y="307" text-anchor="middle" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="11">Latency predictor</text>
+
+  <!-- Arrow: HW Cost → Decision -->
+  <line x1="355" y1="265" x2="530" y2="185" stroke="#10b981" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="455" y="232" text-anchor="middle" fill="#10b981" font-family="JetBrains Mono, monospace" font-weight="500" font-size="11" opacity="0.8" transform="rotate(-12, 455, 232)">cost</text>
+
+  <!-- ─── GPU Monitor Box (bottom-left) ─── -->
+  <rect x="10" y="240" width="140" height="70" rx="10" fill="url(#slateGrad)" stroke="#334155" stroke-width="1.5"/>
+  <!-- GPU icon -->
+  <rect x="28" y="258" width="16" height="12" rx="2" fill="none" stroke="#10b981" stroke-width="1.5"/>
+  <line x1="32" y1="270" x2="32" y2="276" stroke="#10b981" stroke-width="1.5"/>
+  <line x1="38" y1="270" x2="38" y2="276" stroke="#10b981" stroke-width="1.5"/>
+  <text x="50" y="268" fill="#10b981" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="10">GPU Metrics</text>
+  <text x="80" y="293" text-anchor="middle" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-weight="400" font-size="9">Queue | KV-Cache | Load</text>
+
+  <!-- Arrow: GPU → HW Cost -->
+  <line x1="150" y1="275" x2="183" y2="275" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4 2" marker-end="url(#arrowGreen)"/>
+
+  <!-- ─── Decision Maker Box ─── -->
+  <rect x="540" y="110" width="200" height="110" rx="14" fill="url(#slateGrad)" stroke="url(#greenGrad)" stroke-width="2.5" filter="url(#glow)"/>
+  <rect x="540" y="110" width="200" height="30" rx="14" fill="#10b981" opacity="0.1"/>
+  <rect x="540" y="128" width="200" height="1" fill="#10b981" opacity="0.25"/>
+  <text x="640" y="131" text-anchor="middle" fill="#10b981" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="11" letter-spacing="0.5">SCORE &amp; ROUTE</text>
+
+  <!-- Formula inside decision box -->
+  <text x="640" y="168" text-anchor="middle" fill="#e2e8f0" font-family="JetBrains Mono, monospace" font-weight="600" font-size="14">
+    <tspan fill="#10b981">&#955;</tspan><tspan>&#183;Q - (1-</tspan><tspan fill="#10b981">&#955;</tspan><tspan>)&#183;C</tspan>
+  </text>
+  <text x="640" y="195" text-anchor="middle" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="11">argmax over all LLMs</text>
+  <text x="640" y="212" text-anchor="middle" fill="#475569" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="10">&lt;1ms overhead</text>
+
+  <!-- Arrow: Decision → Output -->
+  <line x1="740" y1="165" x2="785" y2="165" stroke="#10b981" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+
+  <!-- ─── Output: LLM Selection ─── -->
+  <rect x="795" y="108" width="115" height="115" rx="12" fill="url(#slateGrad)" stroke="#334155" stroke-width="1.5"/>
+  <text x="852" y="133" text-anchor="middle" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="10" letter-spacing="0.8">SELECTED</text>
+
+  <!-- Mini LLM icons stacked -->
+  <rect x="815" y="145" width="75" height="16" rx="4" fill="#10b981" opacity="0.2" stroke="#10b981" stroke-width="1"/>
+  <text x="852" y="157" text-anchor="middle" fill="#10b981" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="9">Qwen-14B</text>
+
+  <rect x="815" y="167" width="75" height="16" rx="4" fill="#334155" stroke="#475569" stroke-width="0.5"/>
+  <text x="852" y="179" text-anchor="middle" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="9">Llama-8B</text>
+
+  <rect x="815" y="189" width="75" height="16" rx="4" fill="#334155" stroke="#475569" stroke-width="0.5"/>
+  <text x="852" y="201" text-anchor="middle" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="9">Mistral-7B</text>
+
+  <!-- ─── Labels: "plug-in" annotation ─── -->
+  <rect x="168" y="195" width="52" height="18" rx="9" fill="#10b981" opacity="0.15"/>
+  <text x="194" y="208" text-anchor="middle" fill="#10b981" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="9">PLUG-IN</text>
+
+  <!-- Vertical dashed line showing plug-in boundary -->
+  <line x1="180" y1="192" x2="180" y2="215" stroke="#10b981" stroke-width="1" stroke-dasharray="3 2" opacity="0.5"/>
+  <line x1="360" y1="192" x2="360" y2="215" stroke="#10b981" stroke-width="1" stroke-dasharray="3 2" opacity="0.5"/>
+</svg>
