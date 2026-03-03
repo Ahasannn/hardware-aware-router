@@ -1,6 +1,8 @@
 # SLO Modeling and Cost Formulation
 
-This section describes the latency SLO model, the separate cost functions for CARROT vs. our hardware-aware router, and the final routing score formulation used in the λ-sweep evaluation.
+This document describes the latency SLO model, the separate cost functions for CARROT vs. our hardware-aware router, and the final routing score formulation used in the λ-sweep evaluation.
+
+> **Note:** Math in this document uses LaTeX notation. GitHub renders LaTeX in Markdown only in some contexts. If formulas appear as raw text, view this file in a LaTeX-capable renderer (e.g., VS Code with a Markdown+Math extension, or JupyterLab).
 
 ---
 
@@ -134,10 +136,10 @@ $$
 
 Where:
 
-- \(Q\) = CARROT-predicted quality score  
-- CARROT uses only predicted **dollar cost**  
-- Our router uses only predicted **latency cost**  
-- No cross-contamination between the two
+- \(Q\) = quality score from the chosen quality predictor (IRT, CARROT, UMR, or static baseline)
+- CARROT uses only predicted **dollar cost** for \(C\)
+- Our router uses only predicted **latency cost** for \(C\)
+- The two cost definitions are never mixed — each router is evaluated with its own cost signal
 
 ### Special cases
 

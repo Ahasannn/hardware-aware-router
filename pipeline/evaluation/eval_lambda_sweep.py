@@ -110,7 +110,8 @@ def run_lambda_sweep(csv_path, lambdas=None):
             - (1 - lam) * df["static_cost_norm"]
         )
 
-        # OUR score
+        # HW-Router score: IRT quality + hardware latency cost
+        # (IRT chosen as quality component in the paper; any quality predictor can be used here)
         df["ours_score"] = (
             lam * df["irt_quality_score"]
             - (1 - lam) * df["latency_cost_norm"]

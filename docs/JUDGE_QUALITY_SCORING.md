@@ -5,7 +5,7 @@ This guide explains how to score LLM responses using a judge model (Qwen2.5-72B-
 ## Quick Start
 
 ```bash
-# Score all model output files (uses 4 GPUs by default)
+# Score all five model output files (uses 4 GPUs by default)
 python scripts/get_scores.py \
     --model Qwen/Qwen2.5-72B-Instruct \
     --tensor-parallel-size 4
@@ -14,7 +14,14 @@ python scripts/get_scores.py \
 bash scripts/run_judge_scoring.sh
 ```
 
-This reads CSV files for each model in `data/` and writes `*_scored.csv` files with two new columns: `judge_score` (0.0–1.0) and `judge_justification`.
+By default, this processes all five per-model CSVs in `data/data_quality/`:
+- `Llama-3.1-8B-Instruct.csv`
+- `Mistral-7B-Instruct-v0.3.csv`
+- `Phi-3-mini-128k-instruct.csv`
+- `Qwen2.5-14B-Instruct.csv`
+- `Qwen2.5-3B-Instruct.csv`
+
+Each file gets a corresponding `*_scored.csv` output with two new columns: `judge_score` (0.0–1.0) and `judge_justification`.
 
 ## GPU Requirements
 

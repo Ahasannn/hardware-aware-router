@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How to Make Your LLM Router Hardware Aware — HW-Router Blog</title>
+  <meta name="description" content="Your LLM router picks the smartest model but ignores GPU load. Here's how to fix that with one change to your scoring formula." />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg" />
+
+  <!-- Open Graph / Social -->
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="How to Make Your LLM Router Hardware Aware" />
+  <meta property="og:description" content="Your LLM router picks the smartest model but ignores GPU load. Here's how to fix that with one change to your scoring formula." />
+  <meta property="og:image" content="../assets/og-image.svg" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="How to Make Your LLM Router Hardware Aware" />
+  <meta name="twitter:description" content="Your LLM router picks the smartest model but ignores GPU load. Here's how to fix that with one change to your scoring formula." />
+  <meta name="twitter:image" content="../assets/og-image.svg" />
+
+  <link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+
+<!-- ── Navigation ──────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <a class="nav-brand" href="../">HW-Router</a>
+    <div class="nav-links">
+      <a href="../" class="nav-tab">Demo</a>
+      <a href="./hw-aware-routing.html" class="nav-tab active">Blog</a>
+      <a href="https://github.com/Ahasannn/hardware-aware-router" class="nav-tab" target="_blank" rel="noopener">
+        GitHub
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-.1em;"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Article Hero ────────────────────────────────────── -->
+<section class="article-hero">
+  <div class="article-tags">
+    <span class="article-tag">LLM Serving</span>
+    <span class="article-tag">GPU Monitoring</span>
+    <span class="article-tag">Routing</span>
+  </div>
+
+  <h1>Your LLM Router Is Flying Blind.<br/>Here's How to Fix It.</h1>
+
+  <div class="article-meta">
+    <span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+      8 min read
+    </span>
+    <span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      March 2026
+    </span>
+    <span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Ahasan Kabir
+    </span>
+  </div>
+</section>
+
+<!-- ── Article Body ────────────────────────────────────── -->
+<article class="article">
+
+  <!-- TL;DR -->
+  <blockquote>
+    <p>
+      <strong>TL;DR:</strong> Most LLM routers pick the best model for each request
+      but completely ignore GPU load. When traffic spikes, they keep routing to a
+      GPU with 50 queued requests while other GPUs sit idle. The fix: swap your
+      static <code>price/token</code> cost with a live latency prediction. One change
+      to your scoring formula. SLO attainment goes from ~42% to ~98%.
+    </p>
+  </blockquote>
+
+  <!-- TOC -->
+  <div class="toc">
+    <div class="toc-title">In This Post</div>
+    <ol>
+      <li><a href="#problem">The Problem: Routers That Ignore Hardware</a></li>
+      <li><a href="#fix">The Fix: One Substitution</a></li>
+      <li><a href="#monitor">Know Your GPU: What Metrics Matter</a></li>
+      <li><a href="#predictor">Build a Latency Predictor</a></li>
+      <li><a href="#integrate">Plug It Into Your Router</a></li>
+      <li><a href="#results">Does It Work?</a></li>
+    </ol>
+  </div>
+
+  <!-- ── The Problem ──────────────────────────────────── -->
+  <h2 id="problem">The Problem: Routers That Ignore Hardware</h2>
+
+  <p>
+    If you're running multiple LLMs behind a quality router &mdash; RouteLLM, CARROT,
+    or something custom &mdash; you've probably seen this cycle:
+  </p>
+
+  <ol>
+    <li>Router picks the biggest model because it gives the best answers</li>
+    <li>That model's GPU queue fills up</li>
+    <li>Latency spikes to 40&ndash;50 seconds</li>
+    <li>Smaller models sit completely idle</li>
+  </ol>
+
+  <p>
+    The root cause: <strong>your router's cost function is static</strong>. It uses
+    a fixed <code>price/token</code> that says "the 14B model costs more than the
+    3B." True, but irrelevant. When GPU&nbsp;0 has 50 queued requests and GPU&nbsp;1
+    is empty, that price doesn't change. So the router keeps hammering the busy GPU.
+  </p>
+
+  <p>
+    In our benchmarks across three different quality routers, <strong>more than half
+    of all requests missed their latency deadline</strong>. Not because the routers
+    were bad at picking quality &mdash; they're great at that. They just had zero
+    visibility into what the hardware was doing.
+  </p>
+
+  <h3>Why not just use a load balancer?</h3>
+
+  <p>
+    Because LLM requests aren't interchangeable. A coding question and a casual chat
+    need different models. A load balancer treats all backends as identical &mdash;
+    it'll happily send your complex math problem to the 3B model. What you actually
+    need is a router that understands <em>both</em> quality and hardware state.
+  </p>
+
+  <!-- ── The Fix ──────────────────────────────────────── -->
+  <h2 id="fix">The Fix: One Substitution</h2>
+
+  <p>
+    Every quality-aware router uses some version of this scoring formula:
+  </p>
+
+  <pre><code>score = &lambda; * quality(model, prompt) - (1 - &lambda;) * cost(model)</code></pre>
+
+  <p>
+    The router picks whichever model scores highest. The fix is one substitution:
+  </p>
+
+  <pre><code># Before: static cost (never changes)
+cost = price_per_token[model]
+
+# After: live cost (updates every second)
+cost = predict_latency(model, prompt_length, gpu_state)</code></pre>
+
+  <p>
+    <strong>Same quality predictor. Same formula. Same &lambda;.</strong> You just
+    change what "cost" means. Instead of a fixed price, you predict how long this
+    request will actually take on this GPU right now.
+  </p>
+
+  <p>
+    That's why we call it a <strong>plug-in</strong>. Your quality predictor stays
+    untouched. Any router gets hardware awareness just by swapping the cost term.
+  </p>
+
+  <!-- Before/After architecture diagram -->
+  <div class="arch-diagram-svg">
+    <img src="../assets/before-after.svg" alt="Before: static price/token cost. After: live GPU-aware cost predictor (the only new component)" />
+  </div>
+
+  <p>
+    The green box is the only new piece. The rest of this post walks through
+    the three things you need to build it: a GPU monitor, a latency predictor,
+    and the integration into your router.
+  </p>
+
+  <!-- ── Monitor ──────────────────────────────────────── -->
+  <h2 id="monitor">Know Your GPU: What Metrics Matter</h2>
+
+  <p>
+    To predict latency, your model needs to know what the GPU is doing right now.
+    If you serve LLMs with <a href="https://github.com/vllm-project/vllm" target="_blank" rel="noopener">vLLM</a>,
+    this is easy &mdash; it exposes a Prometheus <code>/metrics</code> endpoint out of the box.
+  </p>
+
+  <pre><code>curl http://localhost:8000/metrics</code></pre>
+
+  <p>
+    You'll get a wall of text. Here are the five metrics that actually matter:
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>Why It Matters</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>num_requests_waiting</code></td>
+        <td>Queue depth &mdash; the #1 predictor of latency spikes. If 20 requests are ahead of you, you wait.</td>
+      </tr>
+      <tr>
+        <td><code>num_requests_running</code></td>
+        <td>Active decoding load. More concurrent requests = more memory contention = slower generation.</td>
+      </tr>
+      <tr>
+        <td><code>kv_cache_usage_perc</code></td>
+        <td>Memory pressure. Near 100% and vLLM can't batch new requests at all &mdash; latency cliff.</td>
+      </tr>
+      <tr>
+        <td><code>time_to_first_token</code></td>
+        <td>Recent TTFT trend. A sudden jump from 0.2s to 3s means the GPU is struggling.</td>
+      </tr>
+      <tr>
+        <td><code>inter_token_latency</code></td>
+        <td>Current generation speed. Tells you how fast tokens are coming out right now.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    The approach is simple: run a background thread that polls <code>/metrics</code>
+    on each vLLM server every few seconds. Parse the Prometheus text, store the latest
+    snapshot per model. That's your GPU state vector.
+  </p>
+
+  <blockquote>
+    <p>
+      <strong>Not using vLLM?</strong> The concept is the same for any serving
+      framework. TGI, TensorRT-LLM, and Triton all expose queue depth and memory
+      metrics &mdash; just through different endpoints. You need three signals:
+      queue depth, active requests, and memory pressure.
+    </p>
+  </blockquote>
+
+  <!-- ── Predictor ────────────────────────────────────── -->
+  <h2 id="predictor">Build a Latency Predictor</h2>
+
+  <p>
+    Now you need a model that takes (prompt length + GPU state) and predicts
+    how long a request will take. We use a small MLP (multi-layer perceptron) with
+    two output heads &mdash; one for time-to-first-token, one for time-per-output-token.
+  </p>
+
+  <h3>Inputs and outputs</h3>
+
+  <p>
+    For each request, the predictor sees:
+  </p>
+
+  <ul>
+    <li><strong>Prompt token count</strong> &mdash; longer prompts take longer to prefill</li>
+    <li><strong>GPU metrics snapshot</strong> &mdash; the five metrics from above</li>
+    <li><strong>Model-GPU identifier</strong> &mdash; a 14B on GPU&nbsp;0 behaves differently than a 3B on GPU&nbsp;1</li>
+  </ul>
+
+  <p>
+    And it predicts:
+  </p>
+
+  <ul>
+    <li><strong>TTFT</strong> (time to first token) &mdash; how long until the first token arrives</li>
+    <li><strong>TPOT</strong> (time per output token) &mdash; how fast subsequent tokens stream</li>
+  </ul>
+
+  <h3>Collecting training data</h3>
+
+  <p>
+    The key insight: <strong>you must collect data under varying load</strong>. If you
+    only measure latency when the server is idle, the predictor won't know what
+    "busy" looks like. Send concurrent requests with different traffic patterns &mdash;
+    steady, bursty, and overloaded &mdash; while recording the GPU state <em>at the
+    moment</em> each request was sent plus the actual latency it experienced.
+  </p>
+
+  <p>
+    Around 3,000&ndash;15,000 samples with varied concurrency levels is enough.
+    More data helps, but diminishing returns past 15K.
+  </p>
+
+  <h3>Training</h3>
+
+  <p>
+    The MLP is intentionally tiny: two hidden layers (128 and 64 neurons), predicting
+    in log-space (because latency distributions are heavily skewed). The whole thing
+    trains in <strong>~20 seconds on a CPU</strong>. No GPU needed.
+  </p>
+
+  <p>
+    One subtlety: we predict in log-space (<code>log(TTFT)</code>,
+    <code>log(TPOT)</code>) so that the loss function treats a 2x error
+    the same whether it's 0.1s&rarr;0.2s or 10s&rarr;20s. At inference, exponentiate back.
+  </p>
+
+  <!-- ── Integrate ────────────────────────────────────── -->
+  <h2 id="integrate">Plug It Into Your Router</h2>
+
+  <p>
+    This is the payoff. You have a trained latency predictor and a live GPU monitor.
+    Here's the change to your routing code:
+  </p>
+
+  <h3>Before (quality-only)</h3>
+
+  <pre><code>for model in models:
+    quality = quality_predictor(model, prompt)
+    cost = PRICE_PER_TOKEN[model]                # static!
+    score = lam * quality - (1 - lam) * cost</code></pre>
+
+  <h3>After (hardware-aware)</h3>
+
+  <pre><code>for model in models:
+    quality = quality_predictor(model, prompt)    # unchanged
+    latency = predict_latency(model, prompt, gpu_state[model])
+    cost = normalize(latency)                     # live!
+    score = lam * quality - (1 - lam) * cost      # same formula</code></pre>
+
+  <p>
+    That's the entire change. The quality predictor, scoring formula, and
+    <code>&lambda;</code> parameter are all untouched. The MLP forward pass adds
+    <strong>&lt;1ms</strong> of routing overhead.
+  </p>
+
+  <h3>The &lambda; knob</h3>
+
+  <p>
+    <code>&lambda;</code> gives you a single dial for the quality-speed trade-off:
+  </p>
+
+  <ul>
+    <li><strong>&lambda; &rarr; 1.0:</strong> Prioritize quality. Always pick the best model, even if the GPU is busy.</li>
+    <li><strong>&lambda; &rarr; 0.0:</strong> Prioritize speed. Route to whichever model responds fastest.</li>
+    <li><strong>&lambda; = 0.5:</strong> Balanced. Near-perfect SLOs with minimal quality loss.</li>
+  </ul>
+
+  <p>
+    A customer-facing chatbot might use <code>&lambda; = 0.3</code> (users want fast
+    replies). An offline analysis pipeline might use <code>&lambda; = 0.8</code>
+    (quality matters more than speed). <a href="../#demo">Try our interactive demo</a>
+    to see how &lambda; shifts the trade-off curve in real time.
+  </p>
+
+  <!-- ── Results ──────────────────────────────────────── -->
+  <h2 id="results">Does It Work?</h2>
+
+  <p>
+    We tested this across three quality routers with 5 LLMs on 2 NVIDIA H100 GPUs
+    under realistic traffic:
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Router</th>
+        <th>Before (static cost)</th>
+        <th>After (HW-aware)</th>
+        <th>Improvement</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>CARROT</td>
+        <td>44.7% SLO, 43.9s avg</td>
+        <td>96.1% SLO, 14.4s avg</td>
+        <td>+51pp, 3.0&times; faster</td>
+      </tr>
+      <tr class="highlight-row">
+        <td><strong>IRT</strong></td>
+        <td>42.2% SLO, 45.3s avg</td>
+        <td>97.9% SLO, 12.9s avg</td>
+        <td><strong>+56pp, 3.5&times; faster</strong></td>
+      </tr>
+      <tr>
+        <td>UMR</td>
+        <td>37.3% SLO, 48.4s avg</td>
+        <td>91.5% SLO, 16.7s avg</td>
+        <td>+54pp, 2.9&times; faster</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    Every router sees <strong>50+ percentage point SLO improvement</strong> and
+    <strong>~3x latency reduction</strong>. The hardware cost predictor works as a
+    universal plug-in &mdash; it doesn't care which quality router you're using.
+  </p>
+
+  <p>
+    Quality drops by about 9% relative (0.669 &rarr; 0.606). That's the trade-off:
+    when the big model's GPU is saturated, the router sends requests to a smaller
+    model on an idle GPU instead. The answer is slightly less good, but it arrives
+    in 13 seconds instead of 45.
+  </p>
+
+  <p>
+    <strong>In production, a fast good-enough answer beats a perfect answer
+    that arrives 45 seconds late.</strong> And <code>&lambda;</code> lets you
+    control exactly where on this curve you want to operate.
+  </p>
+
+  <!-- ── Wrap Up ──────────────────────────────────────── -->
+  <h2 id="wrapup">The Takeaway</h2>
+
+  <p>
+    LLM routing and load-awareness shouldn't be separate systems. Quality-only routers
+    leave performance on the table because they never check the hardware. Load balancers
+    leave quality on the table because they don't understand the request. Combining both
+    in one scoring formula gives you the best of both.
+  </p>
+
+  <p>
+    The engineering effort is small: one metrics poller, one tiny MLP, one substitution
+    in your cost function. If you're already running a quality-aware router, you can add
+    hardware awareness in an afternoon.
+  </p>
+
+  <!-- ── CTA ──────────────────────────────────────────── -->
+  <div class="article-cta">
+    <h3>Try It Yourself</h3>
+    <p>
+      The full implementation is open source (Apache 2.0) &mdash; including the hardware
+      monitor, data collection scripts, MLP training, and router integration. Clone the
+      repo and reproduce the results on your own hardware.
+    </p>
+    <a class="btn btn-primary" href="https://github.com/Ahasannn/hardware-aware-router" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      Get the Code
+    </a>
+    <a class="btn btn-outline" href="../#demo">
+      Interactive Demo
+    </a>
+  </div>
+
+  <!-- ── Citation ─────────────────────────────────────── -->
+  <div style="margin-top:2.5rem; padding-top:1.5rem; border-top:1px solid #e2e8f0;">
+    <h3>Citation</h3>
+    <p>
+      If this is useful in your work, please cite the paper
+      (accepted at <strong>DAC 2026</strong>):
+    </p>
+    <pre><code>@inproceedings{kabir2026hwrouter,
+  title     = {{HW-Router}: Hardware-Aware Routing for Scalable Multi-{LLM} Serving},
+  author    = {Kabir, Ahasan and Xue, Jiaqi and Zheng, Mengxin and Lou, Qian},
+  booktitle = {Proceedings of the 63rd Design Automation Conference (DAC)},
+  year      = {2026}
+}</code></pre>
+  </div>
+
+</article>
+
+<!-- ── Footer ───────────────────────────────────────────── -->
+<footer>
+  <div class="footer-links">
+    <a href="../">Demo</a>
+    <a href="./hw-aware-routing.html">Blog</a>
+    <a href="https://github.com/Ahasannn/hardware-aware-router" target="_blank" rel="noopener">GitHub</a>
+    <a href="../paper/DAC_HWRouter.pdf" target="_blank" rel="noopener">Paper (PDF)</a>
+    <a href="https://github.com/Ahasannn/hardware-aware-router/blob/main/LICENSE" target="_blank" rel="noopener">Apache 2.0 License</a>
+  </div>
+  <p>HW-Router &mdash; Accepted at the 63rd Design Automation Conference (DAC) 2026</p>
+</footer>
+
+</body>
+</html>

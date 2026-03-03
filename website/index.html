@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HW-Router — Hardware-Aware Routing for Multi-LLM Serving</title>
+  <meta name="description" content="HW-Router: Hardware-Aware Routing for Scalable Multi-LLM Serving. Accepted at DAC 2026. 3.4× lower latency, 97.9% SLO attainment." />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+
+  <!-- Open Graph / Social -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="HW-Router — Hardware-Aware Routing for Multi-LLM Serving" />
+  <meta property="og:description" content="3.4× lower latency, 97.9% SLO attainment, &lt;1ms routing overhead. Accepted at DAC 2026." />
+  <meta property="og:image" content="assets/og-image.svg" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="HW-Router — Hardware-Aware Routing for Multi-LLM Serving" />
+  <meta name="twitter:description" content="3.4× lower latency, 97.9% SLO attainment, &lt;1ms routing overhead. Accepted at DAC 2026." />
+  <meta name="twitter:image" content="assets/og-image.svg" />
+
+  <link rel="stylesheet" href="assets/style.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── Navigation ──────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <a class="nav-brand" href="./">HW-Router</a>
+    <div class="nav-links">
+      <a href="./" class="nav-tab active">Demo</a>
+      <a href="./blog/hw-aware-routing.html" class="nav-tab">Blog</a>
+      <a href="https://github.com/Ahasannn/hardware-aware-router" class="nav-tab" target="_blank" rel="noopener">
+        GitHub
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-.1em;"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ────────────────────────────────────────────── -->
+<section class="hero">
+  <!-- Animated circuit-board nodes -->
+  <div class="hero-visual" aria-hidden="true">
+    <svg width="100%" height="100%" style="position:absolute;inset:0;">
+      <!-- Routing traces -->
+      <line x1="5%" y1="30%" x2="25%" y2="30%" stroke="#10b981" stroke-width="1" opacity="0.08"/>
+      <line x1="25%" y1="30%" x2="35%" y2="15%" stroke="#10b981" stroke-width="1" opacity="0.06"/>
+      <line x1="25%" y1="30%" x2="35%" y2="45%" stroke="#10b981" stroke-width="1" opacity="0.06"/>
+      <line x1="75%" y1="70%" x2="90%" y2="55%" stroke="#6366f1" stroke-width="1" opacity="0.06"/>
+      <line x1="75%" y1="70%" x2="90%" y2="85%" stroke="#6366f1" stroke-width="1" opacity="0.06"/>
+      <line x1="60%" y1="70%" x2="75%" y2="70%" stroke="#6366f1" stroke-width="1" opacity="0.08"/>
+      <!-- Nodes -->
+      <circle cx="25%" cy="30%" r="4" fill="#10b981" opacity="0.12">
+        <animate attributeName="opacity" values="0.12;0.25;0.12" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="35%" cy="15%" r="3" fill="#10b981" opacity="0.08"/>
+      <circle cx="35%" cy="45%" r="3" fill="#10b981" opacity="0.08"/>
+      <circle cx="5%" cy="30%" r="2" fill="#10b981" opacity="0.06"/>
+      <circle cx="75%" cy="70%" r="4" fill="#6366f1" opacity="0.12">
+        <animate attributeName="opacity" values="0.12;0.25;0.12" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="90%" cy="55%" r="3" fill="#6366f1" opacity="0.08"/>
+      <circle cx="90%" cy="85%" r="3" fill="#6366f1" opacity="0.08"/>
+      <circle cx="60%" cy="70%" r="2" fill="#6366f1" opacity="0.06"/>
+      <!-- Extra scattered dots -->
+      <circle cx="10%" cy="75%" r="2" fill="#10b981" opacity="0.05"/>
+      <circle cx="50%" cy="20%" r="2" fill="#6366f1" opacity="0.05"/>
+      <circle cx="85%" cy="25%" r="2" fill="#10b981" opacity="0.05"/>
+      <circle cx="15%" cy="55%" r="2" fill="#6366f1" opacity="0.05"/>
+    </svg>
+  </div>
+
+  <div class="hero-badges">
+    <span class="badge badge-green">&#9679; DAC 2026 — Accepted</span>
+    <span class="badge badge-blue">Apache 2.0</span>
+    <span class="badge badge-purple">Python 3.9+</span>
+  </div>
+
+  <h1>Hardware-Aware Routing for<br /><span>Scalable Multi-LLM Serving</span></h1>
+
+  <p class="hero-sub">
+    HW-Router dynamically selects the best LLM for each request based on both
+    predicted response quality and real-time hardware conditions — achieving
+    near-perfect SLO attainment without sacrificing throughput.
+  </p>
+
+  <div class="hero-buttons">
+    <a class="btn btn-primary" href="https://github.com/Ahasannn/hardware-aware-router" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      View on GitHub
+    </a>
+    <a class="btn btn-outline" href="paper/DAC_HWRouter.pdf" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/></svg>
+      Read Paper (DAC 2026)
+    </a>
+  </div>
+</section>
+
+<!-- ── Key Results ──────────────────────────────────────── -->
+<section id="results">
+  <div class="container">
+    <h2 class="section-title">Key Results</h2>
+    <p class="section-sub">Evaluated on 5 LLMs across 2 NVIDIA H100 GPUs under realistic traffic patterns.</p>
+
+    <div class="results-table-wrap">
+      <table class="results-table" id="results-table">
+        <thead>
+          <tr>
+            <th>Router</th>
+            <th>Avg Quality ↑</th>
+            <th>Avg Latency (s) ↓</th>
+            <th>SLO Attainment (E2E) ↑</th>
+          </tr>
+        </thead>
+        <tbody id="results-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="callout-pills">
+      <span class="callout-pill">&#9889; 3.4× lower latency vs CARROT</span>
+      <span class="callout-pill">&#9650; 53pp higher SLO attainment</span>
+      <span class="callout-pill">&#9203; &lt;1ms routing overhead</span>
+    </div>
+
+    <p style="margin-top:1.25rem; color: var(--muted); font-size: .88rem; max-width: 680px;">
+      <strong style="color: var(--text);">Note on quality:</strong>
+      HW-Router's lower average quality (0.606 vs 0.657–0.669) is intentional.
+      Quality-only routers always pick the largest model regardless of server load, causing latency spikes and missed SLOs.
+      HW-Router trades a small quality reduction for a 3.4× latency improvement and near-perfect SLO attainment.
+    </p>
+  </div>
+</section>
+
+<!-- ── Interactive Demo ─────────────────────────────────── -->
+<section id="demo">
+  <div class="container">
+    <h2 class="section-title">Interactive Demo</h2>
+    <p class="section-sub">
+      Configure HW-Router, pick a baseline to compare, then drag &lambda; to move the highlighted point along the Pareto curves.
+    </p>
+
+    <!-- ① Configure HW-Router -->
+    <div class="config-card" style="margin-bottom:1.25rem;">
+      <div class="config-step">1</div>
+      <div class="config-body">
+        <div class="config-title">Configure HW-Router</div>
+        <div class="config-sub">Which quality predictor should HW-Router use internally?</div>
+        <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-top:.75rem;">
+          <select class="control-select" id="hw-quality-select" style="min-width:190px;">
+            <option value="irt" selected>IRT</option>
+            <option value="carrot">CARROT</option>
+            <option value="umr">UMR</option>
+          </select>
+          <span id="hw-best-badge" class="badge badge-green">&#9733; best (paper default)</span>
+        </div>
+        <div style="font-size:.74rem; color:var(--muted); margin-top:.5rem;">
+          The hardware cost MLP is a plug-in — it pairs with any quality predictor above
+        </div>
+        <!-- HW toggle inside step 1 -->
+        <div class="toggle-wrap" style="margin-top:1rem;">
+          <label class="toggle">
+            <input type="checkbox" id="hw-toggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">
+            Enable Hardware Cost MLP
+            <small>Swaps static price/token &rarr; real-time latency prediction</small>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② Choose baseline router to compare -->
+    <div class="config-card" style="margin-bottom:1.75rem;">
+      <div class="config-step">2</div>
+      <div class="config-body">
+        <div class="config-title">Choose Baseline to Compare</div>
+        <div class="config-sub">Which quality-only router should appear alongside HW-Router on the charts?</div>
+        <div style="margin-top:.75rem;">
+          <select class="control-select" id="compare-select" style="min-width:190px;">
+            <option value="carrot">CARROT</option>
+            <option value="irt">IRT</option>
+            <option value="umr">UMR</option>
+          </select>
+        </div>
+        <div style="font-size:.74rem; color:var(--muted); margin-top:.5rem;">
+          Shown as a dashed line — uses static price/token cost, no hardware awareness
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ Pareto charts -->
+    <div class="pareto-grid" style="margin-bottom:1.75rem;">
+      <div class="pareto-card">
+        <div class="pareto-card-title">Latency vs Quality</div>
+        <div class="pareto-card-sub">Each point = one &lambda; value &nbsp;|&nbsp; left = quality-focused &nbsp;&rarr;&nbsp; right = cost-focused</div>
+        <div class="pareto-wrap"><canvas id="pareto-lat"></canvas></div>
+      </div>
+      <div class="pareto-card">
+        <div class="pareto-card-title">SLO Attainment vs Quality</div>
+        <div class="pareto-card-sub">Hardware-aware curve stays near top — high SLO at every quality level</div>
+        <div class="pareto-wrap"><canvas id="pareto-slo"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ④ Lambda slider -->
+    <div class="demo-card" style="margin-bottom:1.5rem;">
+      <label class="control-label">&lambda; (Lambda) — drag to move the highlighted point on the curves above</label>
+      <div class="lambda-display" style="margin-top:.5rem;">
+        <span id="lambda-val" class="lambda-value">&lambda; = 0.5</span>
+        <span style="font-size:.78rem; color:var(--muted);">Score&nbsp;=&nbsp;&lambda;&middot;Q &minus; (1&minus;&lambda;)&middot;C</span>
+      </div>
+      <input type="range" id="lambda-slider" min="0" max="10" step="1" value="5" style="margin-top:.5rem;" />
+      <div class="lambda-ends">
+        <span>&#8592; Cost-Focused (low latency)</span>
+        <span>Quality-Focused (best model) &#8594;</span>
+      </div>
+    </div>
+
+    <!-- ⑤ Summary cards -->
+    <div class="summary-cards" id="summary-cards"></div>
+
+  </div>
+</section>
+
+<!-- ── How It Works ─────────────────────────────────────── -->
+<section id="how-it-works">
+  <div class="container">
+    <h2 class="section-title">How It Works</h2>
+    <p class="section-sub">
+      The hardware cost predictor is a <strong>plug-in component</strong>. Any quality predictor (CARROT, IRT, UMR, or future ones) can be made hardware-aware simply by swapping the static cost term for our MLP.
+    </p>
+
+    <div class="arch-diagram-svg">
+      <img src="assets/architecture.svg" alt="HW-Router Architecture: Request flows through Quality Predictor and Hardware Cost MLP into Score and Route decision maker, selecting the best LLM" />
+    </div>
+
+    <div class="formula-block">
+      S<sub>i</sub>(x, h) &nbsp;=&nbsp;
+      <span class="lambda-sym">&lambda;</span> &middot; Q<sub>i</sub>(x)
+      &nbsp;&minus;&nbsp;
+      (1 &minus; <span class="lambda-sym">&lambda;</span>) &middot; C<sub>i</sub>(x, h)
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      Route to: &nbsp; argmax<sub>i</sub> S<sub>i</sub>
+    </div>
+
+    <div class="steps">
+      <div class="step-card">
+        <div class="step-num">Step 1</div>
+        <div class="step-title">Hardware Monitor</div>
+        <div class="step-desc">Polls real-time vLLM Prometheus metrics: queue depths, KV-cache utilization, GPU load — for every server in the pool.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">Step 2</div>
+        <div class="step-title">Quality &amp; Cost Prediction</div>
+        <div class="step-desc">Any quality predictor (CARROT, IRT, UMR, …) estimates response quality. The hardware cost MLP plugs in alongside it, predicting TTFT and TPOT from live hardware state — replacing static price/token.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">Step 3</div>
+        <div class="step-title">Score &amp; Route</div>
+        <div class="step-desc">Combined score S&nbsp;=&nbsp;&lambda;Q&nbsp;&minus;&nbsp;(1&minus;&lambda;)C is computed for each candidate. The highest-scoring model receives the request. Routing adds &lt;1ms overhead.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── Citation ─────────────────────────────────────────── -->
+<section id="citation">
+  <div class="container">
+    <h2 class="section-title">Citation</h2>
+    <p class="section-sub">If you use HW-Router in your research, please cite our paper.</p>
+
+    <div class="bibtex-wrap">
+      <div class="bibtex-header">
+        <span>BibTeX</span>
+        <button class="copy-btn" id="copy-btn" onclick="copyBibtex()">Copy</button>
+      </div>
+      <pre class="bibtex-code" id="bibtex-block">@inproceedings{kabir2026hwrouter,
+  title     = {{HW-Router}: Hardware-Aware Routing for Scalable Multi-{LLM} Serving},
+  author    = {Kabir, Ahasan and Xue, Jiaqi and Zheng, Mengxin and Lou, Qian},
+  booktitle = {Proceedings of the 63rd Design Automation Conference (DAC)},
+  year      = {2026}
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ───────────────────────────────────────────── -->
+<footer>
+  <div class="footer-links">
+    <a href="./">Demo</a>
+    <a href="./blog/hw-aware-routing.html">Blog</a>
+    <a href="https://github.com/Ahasannn/hardware-aware-router" target="_blank" rel="noopener">GitHub</a>
+    <a href="paper/DAC_HWRouter.pdf" target="_blank" rel="noopener">Paper (PDF)</a>
+    <a href="https://github.com/Ahasannn/hardware-aware-router/blob/main/LICENSE" target="_blank" rel="noopener">Apache 2.0 License</a>
+  </div>
+  <p>HW-Router &mdash; Accepted at the 63rd Design Automation Conference (DAC) 2026</p>
+</footer>
+
+<!-- ── Scripts ──────────────────────────────────────────── -->
+<script src="assets/data.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────
+let currentLambdaIdx  = 5;        // λ = 0.5
+let hwQualityRouter   = 'irt';    // quality predictor used INSIDE HW-Router
+let compareRouter     = 'carrot'; // baseline router shown alongside HW-Router
+let hwEnabled         = true;
+let chartLat          = null;
+let chartSlo          = null;
+
+// Color per quality predictor
+const ROUTER_COLOR = { carrot: '#f59e0b', irt: '#6366f1', umr: '#ec4899' };
+
+// ── Key Results Table ─────────────────────────────────────
+(function buildTable() {
+  const tbody = document.getElementById('results-tbody');
+  KEY_RESULTS.forEach(r => {
+    const tr = document.createElement('tr');
+    if (r.isOurs) tr.className = 'ours';
+    tr.innerHTML = `
+      <td>${r.router}${r.isOurs ? ' &#9733;' : ''}</td>
+      <td>${r.quality.toFixed(3)}</td>
+      <td>${r.latency.toFixed(1)}</td>
+      <td>${(r.slo * 100).toFixed(1)}%</td>
+    `;
+    tbody.appendChild(tr);
+  });
+})();
+
+// ── Badge: show "best" only when IRT is selected for HW-Router ──
+function updateBadge() {
+  document.getElementById('hw-best-badge').style.display =
+    hwQualityRouter === 'irt' ? '' : 'none';
+}
+
+// ── Build a dataset for one pareto curve ─────────────────
+// Axes: X = latency or SLO (the "cost" axis), Y = quality.
+// Data kept in lambda order: meta.data[i] = LAMBDA_SWEEP[i] → highlight works.
+function makeDataset(key, xField, label, color, dash) {
+  return {
+    label,
+    data: LAMBDA_SWEEP.map(r => ({ x: r[key][xField], y: r[key].quality })),
+    borderColor: color,
+    backgroundColor: color + '22',
+    borderWidth: dash.length ? 1.8 : 2.5,
+    borderDash: dash,
+    pointRadius: 3,
+    pointHoverRadius: 6,
+    tension: 0.3,
+    fill: false,
+  };
+}
+
+function buildDatasets(xField) {
+  // Baseline: comparison router with static cost (dashed, router color)
+  const cKey   = compareRouter;
+  const cColor = ROUTER_COLOR[cKey];
+  const cName  = ROUTER_META[cKey].label + ' (static cost)';
+
+  const sets = [
+    makeDataset(cKey, xField, cName, cColor, [6, 3]),
+  ];
+
+  // HW-Router: chosen quality predictor + hardware cost (solid green)
+  if (hwEnabled) {
+    const hwKey  = hwQualityRouter + '_hw';
+    const hwName = ROUTER_META[hwQualityRouter].label + ' + HW Cost';
+    sets.push(makeDataset(hwKey, xField, hwName, '#10b981', []));
+  }
+
+  return sets;
+}
+
+// ── Highlight plugin ─────────────────────────────────────
+// Draws a highlighted ring+dot at the current lambda index on every visible dataset.
+// Works on both pareto charts because it's registered globally.
+const highlightPlugin = {
+  id: 'lambdaHighlight',
+  afterDraw(ch) {
+    const idx = currentLambdaIdx;
+    ch.data.datasets.forEach((ds, di) => {
+      if (ds.hidden) return;
+      const meta = ch.getDatasetMeta(di);
+      const pt   = meta.data[idx];
+      if (!pt) return;
+      const ctx = ch.ctx;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 9, 0, 2 * Math.PI);
+      ctx.strokeStyle = ds.borderColor;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 4.5, 0, 2 * Math.PI);
+      ctx.fillStyle = ds.borderColor;
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+};
+
+// ── Shared chart options ──────────────────────────────────
+// X = cost axis (latency or SLO), Y = quality score
+function chartOptions(xLabel, xMin, xMax, fmtX) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    parsing: false,           // data is already {x, y} objects
+    animation: { duration: 200 },
+    interaction: { mode: 'nearest', intersect: false, axis: 'xy' },
+    plugins: {
+      legend: {
+        labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 }, padding: 10, boxWidth: 24 }
+      },
+      tooltip: {
+        backgroundColor: '#1e293b',
+        borderColor: '#334155',
+        borderWidth: 1,
+        titleColor: '#e2e8f0',
+        bodyColor: '#94a3b8',
+        padding: 9,
+        callbacks: {
+          title: items => {
+            const i = items[0].dataIndex;
+            return `λ = ${LAMBDA_SWEEP[i].lambda.toFixed(1)}`;
+          },
+          label: ctx => `  ${ctx.dataset.label}:  Quality ${ctx.parsed.y.toFixed(3)}  |  ${xLabel} ${fmtX(ctx.parsed.x)}`,
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'linear',
+        title: { display: true, text: xLabel, color: '#94a3b8', font: { size: 11 } },
+        grid:  { color: '#1e293b' },
+        ticks: { color: '#64748b', callback: v => fmtX(v) },
+        min: xMin, max: xMax,
+      },
+      y: {
+        type: 'linear',
+        title: { display: true, text: 'Quality Score', color: '#94a3b8', font: { size: 11 } },
+        grid:  { color: '#1e293b' },
+        ticks: { color: '#64748b', callback: v => v.toFixed(2) },
+        min: 0.50, max: 0.73,
+      }
+    }
+  };
+}
+
+// ── Build / update charts ─────────────────────────────────
+function buildCharts() {
+  Chart.register(highlightPlugin);
+
+  // X = Latency (s), Y = Quality
+  chartLat = new Chart(
+    document.getElementById('pareto-lat').getContext('2d'),
+    {
+      type: 'line',
+      data: { datasets: buildDatasets('latency') },
+      options: chartOptions('Latency (s)', 0, 58, v => v.toFixed(1) + 's'),
+    }
+  );
+
+  // X = SLO Attainment (E2E), Y = Quality
+  chartSlo = new Chart(
+    document.getElementById('pareto-slo').getContext('2d'),
+    {
+      type: 'line',
+      data: { datasets: buildDatasets('slo_e2e') },
+      options: chartOptions('SLO Attainment (E2E)', 0, 1.05, v => (v * 100).toFixed(0) + '%'),
+    }
+  );
+}
+
+function refreshCharts() {
+  chartLat.data.datasets = buildDatasets('latency');
+  chartSlo.data.datasets = buildDatasets('slo_e2e');
+  chartLat.update();
+  chartSlo.update();
+  updateCards();
+}
+
+// ── Summary cards ─────────────────────────────────────────
+function updateCards() {
+  const container = document.getElementById('summary-cards');
+  const row    = LAMBDA_SWEEP[currentLambdaIdx];
+  const cName  = ROUTER_META[compareRouter].label + ' (static cost)';
+  const hwKey  = hwQualityRouter + '_hw';
+  const hwName = ROUTER_META[hwQualityRouter].label + ' + HW Cost';
+
+  const fmtQ = v => v.toFixed(3);
+  const fmtL = v => v.toFixed(1) + 's';
+  const fmtS = v => (v * 100).toFixed(1) + '%';
+
+  container.innerHTML = buildCard(cName, false,
+    row[compareRouter].quality, row[compareRouter].latency, row[compareRouter].slo_e2e,
+    fmtQ, fmtL, fmtS);
+
+  if (hwEnabled) {
+    container.innerHTML += buildCard(hwName, true,
+      row[hwKey].quality, row[hwKey].latency, row[hwKey].slo_e2e,
+      fmtQ, fmtL, fmtS);
+  }
+}
+
+function buildCard(name, isHw, quality, latency, sloE2e, fmtQ, fmtL, fmtS) {
+  const sloClass = sloE2e >= 0.9 ? 'good' : sloE2e >= 0.6 ? 'warn' : '';
+  const latClass = latency <= 15  ? 'good' : latency <= 30  ? 'warn' : '';
+  return `
+    <div class="summary-card ${isHw ? 'hw-card' : ''}">
+      <div class="card-router ${isHw ? 'hw' : ''}">${name}</div>
+      <div class="card-metrics">
+        <div class="card-metric">
+          <span class="card-metric-label">Quality</span>
+          <span class="card-metric-value">${fmtQ(quality)}</span>
+        </div>
+        <div class="card-metric">
+          <span class="card-metric-label">Latency</span>
+          <span class="card-metric-value ${latClass}">${fmtL(latency)}</span>
+        </div>
+        <div class="card-metric">
+          <span class="card-metric-label">SLO (E2E)</span>
+          <span class="card-metric-value ${sloClass}">${fmtS(sloE2e)}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Event Handlers ────────────────────────────────────────
+document.getElementById('lambda-slider').addEventListener('input', function () {
+  currentLambdaIdx = parseInt(this.value);
+  document.getElementById('lambda-val').textContent =
+    `λ = ${LAMBDA_SWEEP[currentLambdaIdx].lambda.toFixed(1)}`;
+  // Move highlight only — no dataset rebuild needed
+  chartLat.update('none');
+  chartSlo.update('none');
+  updateCards();
+});
+
+document.getElementById('hw-quality-select').addEventListener('change', function () {
+  hwQualityRouter = this.value;
+  updateBadge();
+  refreshCharts();
+});
+
+document.getElementById('compare-select').addEventListener('change', function () {
+  compareRouter = this.value;
+  refreshCharts();
+});
+
+document.getElementById('hw-toggle').addEventListener('change', function () {
+  hwEnabled = this.checked;
+  refreshCharts();
+});
+
+// ── Copy BibTeX ───────────────────────────────────────────
+function copyBibtex() {
+  const text = document.getElementById('bibtex-block').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+  });
+}
+
+// ── Init ─────────────────────────────────────────────────
+updateBadge();
+buildCharts();
+updateCards();
+</script>
+
+</body>
+</html>
