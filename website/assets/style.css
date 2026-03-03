@@ -630,8 +630,8 @@ nav {
 
 /* ── Blog / Article ──────────────────────────────────── */
 .article-hero {
-  background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 30%, #f0f9ff 70%, #f8fafc 100%);
+  border-bottom: 1px solid #d1fae5;
   padding: 5rem 1.5rem 3rem;
   text-align: center;
   position: relative;
@@ -643,23 +643,32 @@ nav {
   position: absolute;
   inset: 0;
   background-image:
-    radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.04) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(99, 102, 241, 0.03) 0%, transparent 50%);
+    radial-gradient(circle at 25% 85%, rgba(16, 185, 129, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 75% 15%, rgba(59, 130, 246, 0.06) 0%, transparent 45%);
   pointer-events: none;
 }
 
 .article-hero > * { position: relative; z-index: 1; }
 
 .article-hero h1 {
-  font-size: clamp(1.5rem, 4vw, 2.4rem);
+  font-size: clamp(1.6rem, 4.5vw, 2.6rem);
   font-weight: 800;
-  margin: 0 0 1rem;
+  margin: 0 0 .75rem;
   line-height: 1.2;
-  letter-spacing: -.02em;
-  max-width: 720px;
+  letter-spacing: -.025em;
+  max-width: 680px;
   margin-left: auto;
   margin-right: auto;
-  color: #1e293b;
+  color: #0f172a;
+}
+
+.article-subtitle {
+  font-size: 1.1rem;
+  color: #64748b;
+  max-width: 540px;
+  margin: 0 auto 1.5rem;
+  line-height: 1.5;
+  font-weight: 400;
 }
 
 .article-meta {
@@ -676,19 +685,21 @@ nav {
 
 .article-tags {
   display: flex;
-  gap: .4rem;
+  gap: .5rem;
   justify-content: center;
   flex-wrap: wrap;
+  margin-bottom: 1.25rem;
 }
 
 .article-tag {
-  padding: .15rem .6rem;
+  padding: .25rem .75rem;
   border-radius: 999px;
   font-size: .72rem;
   font-weight: 600;
-  background: #f0fdf4;
+  background: rgba(255, 255, 255, .7);
   color: #059669;
-  border: 1px solid #bbf7d0;
+  border: 1px solid #a7f3d0;
+  backdrop-filter: blur(4px);
 }
 
 /* Article body — light classic theme */
