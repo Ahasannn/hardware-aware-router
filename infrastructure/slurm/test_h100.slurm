@@ -12,7 +12,7 @@
 # ==========================================================
 source ~/hardware-aware-router/.venv/bin/activate
 export HF_HOME=/lustre/fs1/home/$USER/.cache/huggingface
-export HF_TOKEN=REDACTED_TOKEN    # optional if models are public
+export HF_TOKEN="${HF_TOKEN:?Set HF_TOKEN before submitting}"  # never hardcode tokens
 export PYTHONUNBUFFERED=1
 mkdir -p logs
 
