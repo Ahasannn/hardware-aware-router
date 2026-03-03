@@ -1,8 +1,10 @@
 # routers.py — Quality Predictors (Paper Section 3.3)
 #
 # All router classes that estimate response quality Q_i(x) for each model.
-# The HW-Router uses IRT as the primary quality predictor combined with
-# the hardware-aware cost predictor.
+# The hardware cost predictor (cost_predictor.py) is a plug-in component:
+# it can be combined with ANY quality predictor here to make it hardware-aware.
+# In the paper we pair IRT with the hardware cost predictor (best results),
+# but CARROT and UMR benefit equally — see README for the full comparison.
 
 from abc import ABC, abstractmethod
 import json

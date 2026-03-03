@@ -35,19 +35,22 @@ See `examples/add_custom_router.py` for a complete working example.
 
 ## Adding a New GPU Configuration
 
-Create a YAML file in `configs/`:
+Create a YAML file in `configs/`. Each model gets a short `name` (your choice) and a `base_url` pointing to its vLLM server:
 
 ```yaml
 # configs/my_gpu_setup.yaml
-0:  # GPU ID
-  - model_name: /path/to/model-a
-    port: 8010
-  - model_name: /path/to/model-b
-    port: 8011
-1:  # GPU ID
-  - model_name: /path/to/model-c
-    port: 8012
+gpus:
+  "0":                                   # GPU 0
+    - name: my-model-a                   # Short identifier (must match model_registry.py)
+      base_url: http://localhost:8010
+    - name: my-model-b
+      base_url: http://localhost:8011
+  "1":                                   # GPU 1
+    - name: my-model-c
+      base_url: http://localhost:8012
 ```
+
+You also need to register the model names in `hw_router/model_registry.py`. See [docs/CUSTOM_HARDWARE_GUIDE.md](docs/CUSTOM_HARDWARE_GUIDE.md) for the full walkthrough.
 
 Then use it with pipeline scripts:
 

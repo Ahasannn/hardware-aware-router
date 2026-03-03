@@ -25,6 +25,8 @@ Unlike static routing approaches that ignore server load, HW-Router integrates a
 - **53 percentage point** higher SLO attainment rate
 - **< 1ms** routing overhead per request
 
+> **Note on quality scores:** HW-Router's lower average quality (0.606 vs. 0.657–0.669) is intentional. Quality-only routers always pick the largest model regardless of server load, which causes latency to spike and SLOs to be missed under real traffic. HW-Router trades a small quality reduction for a 3.4× latency improvement and near-perfect SLO attainment — the core operating point for production serving.
+
 ## Architecture
 
 ```
@@ -51,9 +53,31 @@ Unlike static routing approaches that ignore server load, HW-Router integrates a
 | Component | Module | Description |
 |-----------|--------|-------------|
 | Hardware Monitor | `hw_router.hardware_monitor` | Polls vLLM Prometheus metrics in real-time |
-| Cost Predictor | `hw_router.cost_predictor` | Lightweight MLP predicting TTFT and TPOT |
-| Quality Predictor | `hw_router.routers` | IRT-based quality estimation per model |
-| Decision Maker | `pipeline/evaluation/` | Scoring: S = λ·Q - (1-λ)·C with SLO constraints |
+| Cost Predictor | `hw_router.cost_predictor` | Lightweight MLP predicting TTFT and TPOT — **plug-in component** |
+| Quality Predictor | `hw_router.routers` | Any quality predictor: CARROT, IRT, UMR, or custom |
+| Decision Maker | `pipeline/evaluation/` | Scores each model: S = λ·Q − (1−λ)·C, picks argmax |
+
+### Modular Design
+
+The hardware cost predictor is a **plug-in** — it works with any quality predictor by replacing the static price/token cost term with real-time hardware-aware latency predictions:
+
+```
+Quality-only router:   S = λ · Q(x)       − (1−λ) · static_price/token
+Hardware-aware (+HW):  S = λ · Q(x)       − (1−λ) · C(x, h)   ← same Q, HW cost swapped in
+                                                      ↑
+                                             MLP predicts TTFT + TPOT
+                                             from live hardware state h
+```
+
+This means **any quality predictor can be made hardware-aware** simply by pairing it with the cost predictor. In the paper we use IRT as the quality component because it yields the best results, but CARROT and UMR benefit equally from hardware cost awareness:
+
+| Quality Predictor | Without HW Cost | With HW Cost (+) | SLO lift |
+|-------------------|-----------------|------------------|----------|
+| CARROT | 44.7% SLO, 43.9s | 96.1% SLO, 14.4s | +51pp |
+| IRT | 42.2% SLO, 45.3s | 97.9% SLO, 12.9s | +56pp ⭐ |
+| UMR | 37.3% SLO, 48.4s | 91.5% SLO, 16.7s | +54pp |
+
+*Evaluated at λ = 0.5. IRT+HW is the configuration reported as "HW-Router" in the paper.*
 
 ## Quick Start
 
@@ -74,7 +98,7 @@ pip install -e ".[serving]"   # Core + vLLM serving stack
 pip install -e ".[all]"       # Everything
 ```
 
-### Use HW-Router as a Baseline
+### Using the Routers
 
 All routers share the same interface — `compute(model_name, prompt) -> (quality, cost)`:
 
@@ -117,26 +141,28 @@ Want to run HW-Router with your own GPUs and models? See **[docs/CUSTOM_HARDWARE
 
 ### Running the Full Pipeline
 
+> **Prerequisites:** Steps 2 and 5 require live vLLM servers and at least 2× NVIDIA H100 GPUs (or equivalent). Steps 1, 3, and 4 run on CPU only. See [docs/CUSTOM_HARDWARE_GUIDE.md](docs/CUSTOM_HARDWARE_GUIDE.md) if you are adapting this to your own hardware.
+
 See [pipeline/README.md](pipeline/README.md) for the complete reproduction guide. The key steps are:
 
 ```bash
-# 1. Prepare datasets (downloads from public sources)
+# 1. Prepare datasets (downloads from public sources — CPU only)
 python pipeline/data_preparation/load_mixinstruct.py
 python pipeline/data_preparation/load_longbench.py
 python pipeline/data_preparation/combine_datasets.py
 
-# 2. Collect hardware data (requires vLLM serving)
+# 2. Collect hardware data (requires live vLLM servers + H100 GPUs)
 python pipeline/data_collection/build_hardware_cost_dataset.py \
     --config configs/gpu_model_map_h100.yaml
 
-# 3. Train cost model (~20 seconds)
+# 3. Train cost model — CPU only, ~20 seconds
 python -m pipeline.training.train_cost_model
 
-# 4. Run offline evaluation (lambda sweep)
+# 4. Run offline evaluation (lambda sweep — CPU only)
 python pipeline/evaluation/eval_lambda_sweep.py \
     --eval_csv data/evaluation_dataset_processed_full_with_umr_irt.csv
 
-# 5. Run online evaluation (requires live vLLM)
+# 5. Run online evaluation (requires live vLLM servers + H100 GPUs)
 python pipeline/evaluation/eval_runtime_router.py \
     --config configs/gpu_model_map_h100.yaml --router hw
 ```
