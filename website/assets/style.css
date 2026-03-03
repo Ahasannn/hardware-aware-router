@@ -913,26 +913,26 @@ nav {
 .article-cta p { max-width: 500px; margin: 0 auto 1.25rem; color: #475569; }
 .article-cta .btn { margin: 0 .4rem; }
 
-/* ── Blog-page footer override (light) ───────────────── */
-body:has(.article) { background: #ffffff; }
-body:has(.article) footer {
+/* ── Blog-page overrides (light theme) ───────────────── */
+body.blog-page { background: #ffffff; }
+
+body.blog-page nav {
+  background: rgba(255, 255, 255, .95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #e2e8f0;
+}
+body.blog-page .nav-brand { color: #059669; }
+body.blog-page .nav-links a { color: #64748b; }
+body.blog-page .nav-links a:hover { color: #1e293b; }
+body.blog-page .nav-tab.active { color: #059669; }
+
+body.blog-page footer {
   background: #ffffff;
   border-top: 1px solid #e2e8f0;
   color: #64748b;
 }
-body:has(.article) footer a { color: #64748b; }
-body:has(.article) footer a:hover { color: #059669; }
-
-/* ── Blog-page nav override (light) ──────────────────── */
-body:has(.article) nav {
-  background: rgba(255, 255, 255, .92);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid #e2e8f0;
-}
-body:has(.article) .nav-brand { color: #059669; }
-body:has(.article) .nav-links a { color: #64748b; }
-body:has(.article) .nav-links a:hover { color: #1e293b; }
-body:has(.article) .nav-tab.active { color: #059669; }
+body.blog-page footer a { color: #64748b; }
+body.blog-page footer a:hover { color: #059669; }
 
 @media (max-width: 600px) {
   .nav-links { display: none; }
