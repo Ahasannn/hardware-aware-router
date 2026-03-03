@@ -123,15 +123,6 @@
     visibility into what the hardware was doing.
   </p>
 
-  <h3>Why not just use a load balancer?</h3>
-
-  <p>
-    Because LLM requests aren't interchangeable. A coding question and a casual chat
-    need different models. A load balancer treats all backends as identical &mdash;
-    it'll happily send your complex math problem to the 3B model. What you actually
-    need is a router that understands <em>both</em> quality and hardware state.
-  </p>
-
   <!-- ── The Fix ──────────────────────────────────────── -->
   <h2 id="fix">The Fix: One Substitution</h2>
 
