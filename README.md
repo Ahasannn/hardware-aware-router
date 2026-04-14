@@ -16,6 +16,8 @@ HW-Router is a hardware-aware routing framework for multi-LLM serving that dynam
 
 Unlike static routing approaches that ignore server load, HW-Router integrates a lightweight neural cost predictor that estimates per-request latency (TTFT and TPOT) from live hardware metrics (queue depths, KV-cache utilization, GPU load). Combined with an IRT-based quality predictor, this enables quality-cost trade-off decisions that respect Service Level Objectives (SLOs).
 
+Across diverse workloads, HW-Router achieves **3.4–3.9× lower end-to-end latency**, **46–48 percentage points higher SLO attainment**, **6–8× lower GPU load skew**, and a **3.1–3.4× reduction in waiting-queue fraction** over state-of-the-art baselines (CARROT and IRT) — with only **~200 μs** of additional routing overhead and no loss in output quality.
+
 ## Architecture
 
 ![HW-Router Methodology](assets/methodology.png)
