@@ -179,15 +179,10 @@ hw-router/
 
 ## Models
 
-The framework is evaluated with 5 LLMs across 2 NVIDIA H100 GPUs:
+Evaluated with 5 LLMs across 2 NVIDIA H100 GPUs:
 
-| Model | Parameters | GPU |
-|-------|-----------|-----|
-| Qwen2.5-14B-Instruct | 14B | GPU 0 |
-| Phi-3-mini-128k-instruct | 3.8B | GPU 0 |
-| Llama-3.1-8B-Instruct | 8B | GPU 1 |
-| Qwen2.5-3B-Instruct | 3B | GPU 1 |
-| Mistral-7B-Instruct-v0.3 | 7B | GPU 1 |
+- **GPU 0:** Qwen2.5-14B-Instruct, Phi-3-mini-128k-instruct (3.8B)
+- **GPU 1:** Llama-3.1-8B-Instruct, Qwen2.5-3B-Instruct, Mistral-7B-Instruct-v0.3
 
 ## Adding Your Own Router
 
