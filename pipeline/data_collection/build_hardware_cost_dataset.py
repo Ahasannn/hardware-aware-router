@@ -155,7 +155,7 @@ def main():
     )
     parser.add_argument(
         "--output",
-        default="data/hw_dataset.csv",
+        default="data/h100_full_sweep.csv",
         help="Path to output CSV file.",
     )
     parser.add_argument(
@@ -178,7 +178,7 @@ def main():
     )
     parser.add_argument(
         "--prompt_path",
-        default="data/mixed_prompts_train.parquet",
+        default="data/prompts/mixed_prompts_train.parquet",
         help="Path to combined prompt dataset (Parquet).",
     )
     parser.add_argument(

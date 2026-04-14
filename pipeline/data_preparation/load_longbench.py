@@ -13,7 +13,7 @@ from tqdm import tqdm
 import numpy as np
 
 # ---------------- CONFIG -----------------
-OUT_PATH = "data/longbench_prompts_balanced.parquet"
+OUT_PATH = "data/longbench_prompts.parquet"
 ALL_SUBSETS = [
     "narrativeqa", "qasper", "multifieldqa_en", "hotpotqa",
     "2wikimqa", "musique", "gov_report", "qmsum",

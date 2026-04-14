@@ -74,9 +74,6 @@ pip install -e ".[dev]"
 ```bash
 # Unit tests only (no GPU/vLLM needed)
 pytest tests/ -m "not integration" -v
-
-# Or use make
-make test
 ```
 
 ## Code Style
@@ -85,7 +82,6 @@ We use [ruff](https://github.com/astral-sh/ruff) for linting:
 
 ```bash
 ruff check hw_router/ baselines/
-# Or: make lint
 ```
 
 ## Pull Requests
@@ -93,6 +89,5 @@ ruff check hw_router/ baselines/
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `make test`
-5. Run linter: `make lint`
-6. Submit a pull request
+4. Run linter: `ruff check hw_router/ baselines/`
+5. Submit a pull request

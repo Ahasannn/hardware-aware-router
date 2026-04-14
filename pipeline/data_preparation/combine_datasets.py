@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 # ---------------- CONFIG ----------------
 MIXINSTRUCT_PATH = "data/mixinstruct_prompts.parquet"
 LONGBENCH_PATH = "data/longbench_prompts.parquet"
-OUT_DIR = "data"
+OUT_DIR = "data/prompts"
 TRAIN_SPLIT_PATH = os.path.join(OUT_DIR, "mixed_prompts_train.parquet")
 EVAL_SPLIT_PATH = os.path.join(OUT_DIR, "mixed_prompts_eval.parquet")
 RANDOM_SEED = 42

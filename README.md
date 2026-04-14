@@ -99,33 +99,21 @@ for model in models:
 
 Want to run HW-Router with your own GPUs and models? See **[docs/CUSTOM_HARDWARE_GUIDE.md](docs/CUSTOM_HARDWARE_GUIDE.md)** for a step-by-step walkthrough covering LLM pool config, vLLM setup, data collection, training, and evaluation.
 
-### Running the Full Pipeline
+### Training HW-Router on Your Own Models
 
-> **Prerequisites:** Steps 2 and 5 require live vLLM servers and at least 2× NVIDIA H100 GPUs (or equivalent). Steps 1, 3, and 4 run on CPU only. See [docs/CUSTOM_HARDWARE_GUIDE.md](docs/CUSTOM_HARDWARE_GUIDE.md) if you are adapting this to your own hardware.
+HW-Router is designed to be adapted to any vLLM serving stack. At a glance, the workflow is:
 
-See [pipeline/README.md](pipeline/README.md) for the complete reproduction guide. The key steps are:
+| # | Stage | Command | Runs on |
+|---|---|---|---|
+| 1 | Prepare a prompt dataset | `python pipeline/data_preparation/combine_datasets.py` | CPU |
+| 2 | Collect hardware telemetry from your live vLLM servers | `python pipeline/data_collection/build_hardware_cost_dataset.py --config <your-config>` | GPU |
+| 3 | Train the MLP cost predictor (~20s) | `python -m pipeline.training.train_cost_model` | CPU |
+| 4 | Build an offline evaluation set (optional) | `python pipeline/eval_processing/process_eval_dataset.py …` | CPU |
+| 5 | Offline λ-sweep or online routing eval | `python pipeline/evaluation/eval_lambda_sweep.py …` | CPU / GPU |
 
-```bash
-# 1. Prepare datasets (downloads from public sources — CPU only)
-python pipeline/data_preparation/load_mixinstruct.py
-python pipeline/data_preparation/load_longbench.py
-python pipeline/data_preparation/combine_datasets.py
+Once trained, the cost predictor plugs into any quality predictor (CARROT, IRT, UMR, or your own) to form a hardware-aware router.
 
-# 2. Collect hardware data (requires live vLLM servers + H100 GPUs)
-python pipeline/data_collection/build_hardware_cost_dataset.py \
-    --config configs/gpu_model_map_h100.yaml
-
-# 3. Train cost model — CPU only, ~20 seconds
-python -m pipeline.training.train_cost_model
-
-# 4. Run offline evaluation (lambda sweep — CPU only)
-python pipeline/evaluation/eval_lambda_sweep.py \
-    --eval_csv data/evaluation_dataset_processed_full_with_umr_irt.csv
-
-# 5. Run online evaluation (requires live vLLM servers + H100 GPUs)
-python pipeline/evaluation/eval_runtime_router.py \
-    --config configs/gpu_model_map_h100.yaml --router hw
-```
+Full commands, inputs/outputs, and tips for each stage are in **[pipeline/README.md](pipeline/README.md)**. If you're swapping in different GPUs or a different model pool, also see **[docs/CUSTOM_HARDWARE_GUIDE.md](docs/CUSTOM_HARDWARE_GUIDE.md)**.
 
 ## Models
 
