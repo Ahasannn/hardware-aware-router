@@ -29,15 +29,15 @@ Across diverse workloads, HW-Router achieves **3.4–3.9× lower end-to-end late
 | Hardware Monitor | `hw_router.hardware_monitor` | Polls vLLM Prometheus metrics in real-time |
 | Cost Predictor | `hw_router.cost_predictor` | Lightweight MLP predicting TTFT and TPOT — **plug-in component** |
 | Quality Predictor | `hw_router.routers` | Any quality predictor: CARROT, IRT, UMR, or custom |
-| Decision Maker | `pipeline/evaluation/` | Scores each model: S = λ·Q − (1−λ)·C, picks argmax |
+| Decision Maker | `pipeline/evaluation/` | Scores each model: S = (1−λ)·Q − λ·C, picks argmax |
 
 ### Modular Design
 
 The hardware cost predictor is a **plug-in** — it works with any quality predictor by replacing the static price/token cost term with real-time hardware-aware latency predictions:
 
 ```
-Quality-only router:   S = λ · Q(x)       − (1−λ) · static_price/token
-Hardware-aware (+HW):  S = λ · Q(x)       − (1−λ) · C(x, h)   ← same Q, HW cost swapped in
+Quality-only router:   S = (1−λ) · Q(x)   − λ · static_price/token
+Hardware-aware (+HW):  S = (1−λ) · Q(x)   − λ · C(x, h)       ← same Q, HW cost swapped in
                                                       ↑
                                              MLP predicts TTFT + TPOT
                                              from live hardware state h
