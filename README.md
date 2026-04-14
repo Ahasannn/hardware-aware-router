@@ -8,7 +8,9 @@
 
 ## Overview
 
-![HW-Router Overview](assets/overview.png)
+<p align="center">
+  <img src="assets/overview.png" alt="HW-Router Overview" width="600">
+</p>
 
 HW-Router is a hardware-aware routing framework for multi-LLM serving that dynamically selects the best model for each incoming request based on both predicted response quality and real-time hardware conditions.
 
