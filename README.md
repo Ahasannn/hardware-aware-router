@@ -95,20 +95,6 @@ for model in models:
     print(f"{model}: quality={quality:.3f}, score={score:.4f}")
 ```
 
-### Reproduce Paper Figures
-
-No GPU needed — runs on any laptop using the included evaluation data:
-
-```bash
-make reproduce
-```
-
-Or manually:
-
-```bash
-python scripts/reproduce_figures.py
-```
-
 ### Running on Your Own Hardware
 
 Want to run HW-Router with your own GPUs and models? See **[docs/CUSTOM_HARDWARE_GUIDE.md](docs/CUSTOM_HARDWARE_GUIDE.md)** for a step-by-step walkthrough covering LLM pool config, vLLM setup, data collection, training, and evaluation.
