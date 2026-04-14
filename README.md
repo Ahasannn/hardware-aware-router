@@ -141,44 +141,6 @@ python pipeline/evaluation/eval_runtime_router.py \
     --config configs/gpu_model_map_h100.yaml --router hw
 ```
 
-## Repository Structure
-
-```
-hw-router/
-├── hw_router/              # Core library (pip-installable)
-│   ├── constants.py        # Prices, normalization constants, quality proxies
-│   ├── model_registry.py   # Model name → ID mappings (no hardcoded paths)
-│   ├── cost_predictor.py   # Neural cost model (HardwareCostNet + predictor)
-│   ├── routers.py          # Quality predictors (IRT, CARROT, UMR, baselines)
-│   ├── hardware_monitor.py # Real-time vLLM metrics polling
-│   └── load_patterns.py    # Request arrival patterns (Poisson, microburst, sustained)
-│
-├── baselines/              # Baseline router implementations
-│   ├── carrot/             # CARROT router (KNN + Linear)
-│   ├── irt/                # IRT/MIRT quality predictor
-│   └── umr/                # Unified Model Router (clustering-based)
-│
-├── pipeline/               # Reproducibility pipeline (see pipeline/README.md)
-│   ├── data_preparation/   # Step 1: Prepare datasets
-│   ├── data_collection/    # Step 2: Collect hardware data from vLLM
-│   ├── training/           # Step 3: Train cost model
-│   ├── eval_processing/    # Step 4: Process evaluation datasets
-│   └── evaluation/         # Step 5: Run evaluations (offline + online)
-│
-├── analysis/               # Post-hoc analysis and visualization
-│   ├── plots/              # Figure generation scripts
-│   └── notebooks/          # Jupyter notebooks for exploration
-│
-├── examples/               # Usage examples
-├── configs/                # GPU-model YAML configuration maps
-├── scripts/                # Utilities (scoring, figure reproduction)
-├── infrastructure/         # Deployment (SLURM jobs, vLLM launch scripts)
-├── data/                   # Datasets (see data/sample/README.md)
-├── checkpoints/            # Model weights
-├── tests/                  # Test suite
-└── docs/                   # Additional documentation
-```
-
 ## Models
 
 Evaluated with 5 LLMs across 2 NVIDIA H100 GPUs:
