@@ -18,7 +18,7 @@ Unlike static routing approaches that ignore server load, HW-Router integrates a
 
 ![HW-Router Methodology](assets/methodology.png)
 
-**Components (Paper Section 3):**
+**Components:**
 
 | Component | Module | Description |
 |-----------|--------|-------------|
