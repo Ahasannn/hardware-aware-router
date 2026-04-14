@@ -2,51 +2,21 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![DAC 2026](https://img.shields.io/badge/DAC-2026-green.svg)](paper/DAC_HWRouter.pdf)
+[![DAC 2026](https://img.shields.io/badge/DAC-2026-green.svg)](https://dac.com)
 
 > **Accepted at the 63rd Design Automation Conference (DAC), 2026**
 
 ## Overview
 
+![HW-Router Overview](assets/overview.png)
+
 HW-Router is a hardware-aware routing framework for multi-LLM serving that dynamically selects the best model for each incoming request based on both predicted response quality and real-time hardware conditions.
 
 Unlike static routing approaches that ignore server load, HW-Router integrates a lightweight neural cost predictor that estimates per-request latency (TTFT and TPOT) from live hardware metrics (queue depths, KV-cache utilization, GPU load). Combined with an IRT-based quality predictor, this enables quality-cost trade-off decisions that respect Service Level Objectives (SLOs).
 
-### Key Results
-
-| Router | Avg Quality | Avg Latency (s) | SLO Attainment (E2E) |
-|--------|-------------|------------------|----------------------|
-| CARROT | 0.657 | 43.9 | 44.7% |
-| IRT | 0.669 | 45.3 | 42.2% |
-| UMR | 0.665 | 48.4 | 37.3% |
-| **HW-Router (Ours)** | **0.606** | **12.9** | **97.9%** |
-
-- **3.4x** lower average latency compared to CARROT baseline
-- **53 percentage point** higher SLO attainment rate
-- **< 1ms** routing overhead per request
-
-> **Note on quality scores:** HW-Router's lower average quality (0.606 vs. 0.657–0.669) is intentional. Quality-only routers always pick the largest model regardless of server load, which causes latency to spike and SLOs to be missed under real traffic. HW-Router trades a small quality reduction for a 3.4× latency improvement and near-perfect SLO attainment — the core operating point for production serving.
-
 ## Architecture
 
-```
-                    ┌──────────────────────────────────┐
-                    │         HW-Router (§3)           │
-    Incoming        │                                  │
-    Request ──────►│  ┌─────────────┐ ┌─────────────┐ │
-       x            │  │  Quality     │ │    Cost     │ │    ┌──────────┐
-                    │  │  Predictor   │ │  Predictor  │ │───►│ Decision │──► LLM_i
-                    │  │  Q_i(x)      │ │  C_i(x,h)  │ │    │  Maker   │
-                    │  │  (IRT/MIRT)  │ │  (MLP)      │ │    │ S=λQ-C   │
-                    │  └──────┬──────┘ └──────┬──────┘ │    └──────────┘
-                    │         │               │        │
-                    │         │        ┌──────┴──────┐ │
-                    │         │        │  Hardware   │ │
-                    │         │        │  Monitor    │ │
-                    │         │        │  (vLLM)     │ │
-                    │         │        └─────────────┘ │
-                    └──────────────────────────────────┘
-```
+![HW-Router Methodology](assets/methodology.png)
 
 **Components (Paper Section 3):**
 
@@ -202,8 +172,7 @@ hw-router/
 ├── data/                   # Datasets (see data/sample/README.md)
 ├── checkpoints/            # Model weights
 ├── tests/                  # Test suite
-├── docs/                   # Additional documentation
-└── paper/                  # Paper PDF
+└── docs/                   # Additional documentation
 ```
 
 ## Models
