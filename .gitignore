@@ -209,6 +209,9 @@ __marimo__/
 CLAUDE.md
 .vscode/
 
+# Paper (separate git repo for Overleaf)
+paper/
+
 # Large data files
 results/
 *.csv
